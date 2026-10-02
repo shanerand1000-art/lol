@@ -506,6 +506,101 @@ Before finishing, silently check:
 After filling the Excel cells, if a chat reply is needed, reply only:
 Done.
 
+==================================================
+SOURCE PRIORITY + HOW MUCH WORK TO SHOW
+==================================================
+
+Use the finance methods in this prompt exactly as written.
+
+These methods were taken from the reference slide decks, so they should be treated as the MAIN authority for:
+- which formula to use
+- which Excel function to use
+- what each variable means
+- how many steps should be shown
+- how the problem should be organized
+
+The worksheet should show about the same amount of work as the slide examples:
+- enough to see how the answer was found
+- not extra work just to make the sheet look complete
+- no duplicate methods unless the problem really benefits from it
+- no unnecessary check rows
+- no extra variables that are not used
+
+Use the smallest layout that correctly solves the problem.
+
+For a simple one-step problem, keep it very short.
+
+Example:
+
+r      8%
+n      2
+FV     3000
+PV     =PV(C2,C3,,C4)
+
+Do not turn a simple problem into a full table.
+
+For problems where timing across years matters, such as variable dividends or multiple growth rates, use a small timeline.
+
+For loans, bonds, or TVM questions, use a short vertical block only with the variables that are actually needed.
+
+Use abbreviations when they are standard and clear:
+
+r = required return / rate
+g = growth rate
+n = number of periods
+PV = present value
+FV = future value
+PMT = payment
+YTM = yield to maturity
+APR = annual percentage rate
+EAR = effective annual rate
+HPR = holding period return
+CF = cash flow
+Div = dividend
+P0 = price today
+P1 = price at end of Year 1
+P2 = price at end of Year 2
+TV = terminal value
+
+Do not abbreviate so aggressively that the sheet becomes hard to understand.
+
+For example:
+- use PV instead of Present Value
+- use FV instead of Future Value
+- use PMT instead of Payment
+- use r instead of Required Return
+- use g instead of Growth Rate
+- use CF instead of Cash Flow when the meaning is obvious
+- use Price if P0/P1/P2 would make the sheet less clear
+
+For stock problems, prefer the same kind of short timeline structure used in the examples.
+
+Example:
+
+r
+g
+
+Year
+Div
+P2
+CF
+PV
+
+Price
+
+Do not automatically add:
+VARIABLES
+VALUES
+Using NPV
+Check
+Verification
+Price = sum of PVs
+
+unless one of those is actually needed.
+
+The worksheet should feel like quick, correct finance work:
+short labels, correct formulas, only necessary steps.
+
 OUTPUT FORMAT FOR THE AUTO-TYPER (this replaces "fill the Excel cells" and "reply only Done" above):
 You cannot edit Excel directly here. Instead, print the finished worksheet as short plain text first. Then output this exact block, with no markdown fences around it:
 
@@ -515,7 +610,7 @@ AUTO_TYPE_JSON_END
 
 List EVERY cell that should contain something, with its address and exact contents, in the order it should be typed.
 Formula cells start with = exactly as typed in Excel. Put only cell contents in the JSON, no formatting. A plain rate may be written as a percent like 15.1% (Excel turns it into 0.151); otherwise no dollar signs or thousands commas.
-Keep column A and row 1 completely empty: no labels, no stray 0, no year or timeline numbers there. Start the worksheet in column B at row 3 or lower. For a timeline, put the year numbers in a row below row 1 starting at column C, with the row labels in column B.
+Keep column A and row 1 completely empty: no labels, no stray 0, no year or timeline numbers there. Start the worksheet in column B at row 2 or lower. For a timeline, put the year numbers in a row below row 1 starting at column C, with the row labels in column B.
 Follow the short label style above (r, n, PV, FV, PMT, CF, P0, Sale Px). Never use FORMULATEXT.
 Never use dollar signs in formulas (no locked or absolute references like $C$3 or C$3). Write plain references like C3, and ignore the $ in the examples above. Every formula is typed into its own cell, so nothing needs locking.
 Use valid JSON (double quotes, no trailing commas) and do not wrap the block in code fences.
@@ -803,7 +898,7 @@ def analyze(win: SweetWindow):
             fix = contents + [
                 "Your previous answer was:\n" + text,
                 "That put cells in column A or row 1 (" + ", ".join(stray) + "). Redo the ENTIRE answer "
-                "with nothing in column A or row 1: start in column B at row 3 or lower, and update "
+                "with nothing in column A or row 1: start in column B at row 2 or lower, and update "
                 "every formula reference to match the new cell positions. Same output format as before.",
             ]
             text2  = _generate(client, config, fix)
