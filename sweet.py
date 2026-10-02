@@ -124,9 +124,9 @@ TYPE_CHAR_DELAY  = 0.5    # seconds between typed characters
 CELL_PAUSE       = 0.5    # seconds between finishing one cell and moving to the next
 RESYNC_EVERY     = 20     # go back to A1 to re-sync after this many cells (0 = never)
 LOG_FILE         = os.path.join(HERE, "sweet.log")
-VERSION          = "v12 - clipboard switch"
+VERSION          = "v13 - clipboard off by default"
 LOWERCASE_ALL    = True   # type and copy everything in lowercase (pv, div1, fv ...)
-COPY_TO_CLIPBOARD = True  # False = never touch the clipboard (the typer still works; see sweet.log)
+COPY_TO_CLIPBOARD = False # True = also copy the result to the clipboard; False = never touch it (typer still works)
 
 # ─── system prompt (the full finance worksheet prompt) ─────────────────────────
 SYSTEM_PROMPT = """You are an Excel finance worksheet assistant.
