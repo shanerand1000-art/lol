@@ -33,6 +33,7 @@ import time
 import queue
 import argparse
 import threading
+from decimal import Decimal
 import tkinter as tk
 
 # ─── dependency check ──────────────────────────────────────────────────────────
@@ -601,6 +602,430 @@ unless one of those is actually needed.
 The worksheet should feel like quick, correct finance work:
 short labels, correct formulas, only necessary steps.
 
+==================================================
+QUESTION-TYPE DECISION RULE
+==================================================
+
+BEFORE putting anything into Excel:
+
+1. Identify exactly what type of finance question this is.
+2. Decide which method from this prompt applies.
+3. Decide how much worksheet setup that type of problem actually needs.
+4. Use the SMALLEST setup that matches the method.
+5. Do not add extra rows, tables, timelines, or helper cells unless they are needed.
+
+The method and amount of work should depend on the question type.
+
+Do NOT use the same worksheet layout for every problem.
+
+==================================================
+SIMPLE PV / FV
+==================================================
+
+If it is just a basic lump-sum PV or FV question, keep it very short.
+
+Example:
+
+r
+n
+FV
+PV
+
+or:
+
+r
+n
+PV
+FV
+
+Do not add PMT, TYPE, a timeline, or a full table if they are not needed.
+
+==================================================
+SIMPLE RATE / NPER
+==================================================
+
+Only show the variables needed.
+
+Example:
+
+n
+PV
+FV
+r =RATE(...)
+
+or:
+
+r
+PV
+FV
+n =NPER(...)
+
+If no starting amount is given and the amount does not affect the result, use 1000 as the base amount.
+
+Do not add extra TVM variables that are not part of the problem.
+
+==================================================
+SIMPLE PMT / ANNUITY
+==================================================
+
+Use the normal Excel TVM setup only with the needed variables:
+
+r
+n
+PV
+FV
+PMT
+Type only if timing matters
+
+Use:
+
+=PMT(...)
+=PV(...)
+=FV(...)
+
+Do not build a payment timeline unless the problem specifically needs one.
+
+==================================================
+NPV / UNEVEN FUTURE CASH FLOWS
+==================================================
+
+For a small number of future CFs, keep it simple.
+
+Use:
+
+=NPV(rate,CF1,CF2,CF3,...)
+
+The future CFs can be typed directly into the NPV formula.
+
+Example:
+
+r      5%
+PV     =NPV(C2,1000,3500,0,5500)
+
+Do NOT automatically create:
+
+Year 1 2 3 4
+CF row
+PV row
+NPV check
+
+unless the timeline is actually needed to understand the problem.
+
+IMPORTANT:
+
+NPV only contains future CFs.
+
+Any time-0 CF stays OUTSIDE NPV.
+
+Example:
+
+=NPV(0.08,4000,4000)+8000
+
+==================================================
+PERPETUITY
+==================================================
+
+If it is just a basic perpetuity, do not create a TVM table.
+
+Use only what is needed:
+
+PMT
+r
+PV
+
+Formula:
+
+=PMT/r
+
+For a delayed perpetuity, then use separate steps because timing matters.
+
+==================================================
+EAR / APR
+==================================================
+
+If the question only asks for EAR:
+
+APR
+n
+EAR =EFFECT(...)
+
+If the question asks for APR from EAR:
+
+EAR
+n
+APR =NOMINAL(...)
+
+Do not build a TVM block.
+
+==================================================
+T-BILL / HPR
+==================================================
+
+Keep it short.
+
+For HPR:
+
+Beg Px
+End Px
+HPR
+
+For annualized T-bill return:
+
+Beg Px
+End Px
+Days
+HPR
+Ann Ret
+
+Do not use a large table.
+
+==================================================
+LOAN PAYMENT
+==================================================
+
+For a basic loan payment question:
+
+r
+n
+PV
+PMT
+
+FV and Type only if needed.
+
+Do not build an amortization schedule unless the question asks about interest, principal, or remaining balance.
+
+==================================================
+LOAN BALANCE
+==================================================
+
+If finding a remaining loan balance:
+
+1. Find PMT first if it is not already given.
+2. Then use that PMT in the balance calculation.
+
+Use two small calculation blocks if needed.
+
+Do not put the whole loan history into a table unless the problem asks for an amortization schedule.
+
+==================================================
+AMORTIZATION
+==================================================
+
+Only use an amortization table if the question needs period-by-period values.
+
+Use short columns such as:
+
+Yr
+Beg Bal
+Pmt
+Int
+Prin
+End Bal
+
+Use:
+
+=PMT(...)
+=IPMT(...)
+=PPMT(...)
+
+==================================================
+BASIC BOND PRICE
+==================================================
+
+Use a small TVM block:
+
+r
+n
+PMT
+PV
+FV
+
+For semiannual bonds:
+
+r = YTM/2
+n = Years*2
+PMT = Annual Coupon/2
+FV = Par
+PV =PV(...)
+
+Do not create extra bond tables for a basic price problem.
+
+==================================================
+BOND YTM
+==================================================
+
+Use only the needed bond variables:
+
+n
+PMT
+PV
+FV
+r
+
+For semiannual:
+
+r =RATE(...)
+
+YTM =r*2
+
+Do not calculate bond price again if the price is already given.
+
+==================================================
+BOND PRICE LATER / TOTAL RETURN
+==================================================
+
+These are naturally multi-step problems.
+
+First calculate the future sale price if needed.
+
+Then calculate coupon CF and total return.
+
+Use a few short sections or rows.
+
+Do not combine everything into one giant formula.
+
+==================================================
+CONSTANT DIVIDEND STOCK
+==================================================
+
+Keep it very short:
+
+Div
+r
+Price
+
+Formula:
+
+=Div/r
+
+No timeline is needed.
+
+==================================================
+CONSTANT GROWTH STOCK
+==================================================
+
+If DIV0 is given:
+
+DIV0
+g
+DIV1
+r
+Price
+
+Calculate:
+
+DIV1 =DIV0*(1+g)
+
+Price =DIV1/(r-g)
+
+Do not make a multi-year timeline for a basic Gordon Growth question.
+
+==================================================
+ONE-PERIOD STOCK
+==================================================
+
+Keep it short:
+
+Div
+P1
+r
+Price
+
+or, if finding return:
+
+Div
+P1
+P0
+r
+
+No timeline needed unless it helps with the problem.
+
+==================================================
+VARIABLE DIVIDENDS
+==================================================
+
+This IS a problem where a timeline is useful.
+
+Use years across columns.
+
+Use only necessary rows such as:
+
+Year
+Div
+Price at terminal year
+CF
+PV
+Price
+
+Do not add duplicate NPV checks unless NPV is actually being used as the solving method.
+
+==================================================
+VARIABLE DIVIDENDS + CONSTANT GROWTH
+==================================================
+
+Use a timeline because timing matters.
+
+Calculate:
+
+next dividend
+terminal price
+total CF at terminal year
+PV of each needed CF
+current price
+
+Keep the labels short.
+
+Do not add extra rows that are not used.
+
+==================================================
+NO DIVIDENDS NOW
+==================================================
+
+Use a timeline because the start date of the dividend matters.
+
+Show:
+
+Year
+Div
+r
+future Price
+current Price
+
+Do not build a full TVM table unless it actually helps.
+
+==================================================
+SUSTAINABLE GROWTH / PAYOUT
+==================================================
+
+Use only small rows:
+
+Payout
+Plowback
+ROE
+SGR
+
+No timeline or TVM table.
+
+==================================================
+GENERAL RULE
+==================================================
+
+Always ask:
+
+"What is the minimum amount of Excel work needed to solve this correctly using the method in this prompt?"
+
+Then build only that.
+
+Simple problem = simple sheet.
+
+Timing problem = timeline.
+
+Multi-stage problem = a few separate helper calculations.
+
+Amortization problem = table only when needed.
+
+Never add extra structure just because Excel allows it.
+
 OUTPUT FORMAT FOR THE AUTO-TYPER (this replaces "fill the Excel cells" and "reply only Done" above):
 You cannot edit Excel directly here. Instead, print the finished worksheet as short plain text first. Then output this exact block, with no markdown fences around it:
 
@@ -609,7 +1034,7 @@ AUTO_TYPE_JSON_START
 AUTO_TYPE_JSON_END
 
 List EVERY cell that should contain something, with its address and exact contents, in the order it should be typed.
-Formula cells start with = exactly as typed in Excel. Put only cell contents in the JSON, no formatting. A plain rate may be written as a percent like 15.1% (Excel turns it into 0.151); otherwise no dollar signs or thousands commas.
+Formula cells start with = exactly as typed in Excel. Put only cell contents in the JSON, no formatting. Write every rate and percent as a decimal: 0.08, not 8%, and 0.151, not 15.1%. Never type a % sign anywhere (ignore the % signs in the examples above). No dollar signs or thousands commas.
 Keep column A and row 1 completely empty: no labels, no stray 0, no year or timeline numbers there. Start the worksheet in column B at row 2 or lower. For a timeline, put the year numbers in a row below row 1 starting at column C, with the row labels in column B.
 Follow the short label style above (r, n, PV, FV, PMT, CF, P0, Sale Px). Never use FORMULATEXT.
 Never use dollar signs in formulas (no locked or absolute references like $C$3 or C$3). Write plain references like C3, and ignore the $ in the examples above. Every formula is typed into its own cell, so nothing needs locking.
@@ -777,6 +1202,10 @@ def _addr_key(addr: str):
     return (int(m.group(2)), _col_to_num(m.group(1)))
 
 
+def _pct_to_decimal(m) -> str:
+    return format((Decimal(m.group(1)) / 100).normalize(), "f")
+
+
 def _clean_value(v) -> str:
     s = str(v).strip()
     for a, b in (("−", "-"), ("–", "-"), ("—", "-"),
@@ -785,6 +1214,8 @@ def _clean_value(v) -> str:
     s = s.replace("\t", " ").replace("\r", " ").replace("\n", " ")
     if s.startswith("="):
         s = s.replace("$", "")        # no locked ($) references in typed formulas
+    if s.startswith("=") or re.fullmatch(r"-?\d+(\.\d+)?%", s):
+        s = re.sub(r"(\d+(?:\.\d+)?)%", _pct_to_decimal, s)   # 8% -> 0.08
     return s
 
 
