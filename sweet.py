@@ -118,7 +118,7 @@ HOTKEY_QUIT    = "ctrl+shift+q"
 TYPE_START_DELAY = 3      # seconds to click into Excel after pressing the type hotkey
 TYPE_CHAR_DELAY  = 0.5    # seconds between typed characters
 CELL_PAUSE       = 0.5    # seconds between finishing one cell and moving to the next
-NAV_KEY_DELAY    = 0.03   # per-character delay when typing a cell address (navigation only)
+RESYNC_EVERY     = 20     # go back to A1 to re-sync after this many cells (0 = never)
 LOG_FILE         = os.path.join(HERE, "sweet.log")
 
 # ─── system prompt (the full finance worksheet prompt) ─────────────────────────
@@ -1394,18 +1394,25 @@ def _release_modifiers():
     _wait(0.2)
 
 
-def _goto_cell(addr: str):
-    """Jump to a cell with no dialog: Escape, Ctrl+Home (A1), then arrow keys."""
-    row, col = _addr_key(addr)
+def _anchor(pos: list):
+    """Go to A1 (the one known position) and reset the tracked cursor."""
     pyautogui.press("escape")
     _wait(0.1)
     pyautogui.hotkey("ctrl", "home")
     _wait(0.3)
-    if row > 1:
-        pyautogui.press("down", presses=row - 1, interval=0.01)
-    if col > 1:
-        pyautogui.press("right", presses=col - 1, interval=0.01)
-    _wait(0.2)
+    pos[0], pos[1] = 1, 1
+
+
+def _goto_cell(addr: str, pos: list):
+    """Move straight from the current cell to addr with arrow keys."""
+    row, col = _addr_key(addr)
+    dr, dc = row - pos[0], col - pos[1]
+    if dr:
+        pyautogui.press("down" if dr > 0 else "up", presses=abs(dr), interval=0.01)
+    if dc:
+        pyautogui.press("right" if dc > 0 else "left", presses=abs(dc), interval=0.01)
+    pos[0], pos[1] = row, col
+    _wait(0.15)
 
 
 def _type_value(value: str):
@@ -1417,7 +1424,7 @@ def _type_value(value: str):
         _wait(TYPE_CHAR_DELAY)
     # Excel's AutoComplete can tack extra text onto labels like "Price"; Delete removes it.
     pyautogui.press("delete")
-    pyautogui.press("enter")
+    pyautogui.hotkey("ctrl", "enter")      # commit and STAY on this cell
 
 
 def auto_type(win: SweetWindow):
@@ -1445,8 +1452,12 @@ def auto_type(win: SweetWindow):
         _release_modifiers()
         win.set_state("working")
 
-        for addr, value in cells:
-            _goto_cell(addr)
+        pos = [1, 1]
+        _anchor(pos)                       # start at A1 once
+        for i, (addr, value) in enumerate(cells):
+            if RESYNC_EVERY and i and i % RESYNC_EVERY == 0:
+                _anchor(pos)
+            _goto_cell(addr, pos)
             _type_value(value)
             log(f"  {addr:<6} {value}")
             _wait(CELL_PAUSE)
