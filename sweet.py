@@ -141,51 +141,45 @@ C6 [value or formula]
 B7 Type
 C7 [value if needed]
 The unknown variable should contain the formula that solves the problem.
-When useful, place the formula text beside an important result:
-D6:
-=FORMULATEXT(C6)
-Use FORMULATEXT only when it helps make an important calculation easier to review.
-Use descriptive labels such as:
+Use short shorthand labels like a student would, such as:
 Rate
 Nper
 Pmt
 PV
 FV
 Type
-Periodic Rate
-Payments per Year
-Payment Period
-Loan Amount
-Beginning Balance
-Interest
-Principal
-Ending Balance
-Coupon
-Coupon Rate
-Face Value
+Mo Rate
+Pmts/yr
+Loan
+Beg Bal
+Int
+Prin
+End Bal
+Cpn
+Cpn Rate
+Face
 Price
 YTM
-Annual YTM
-Current Yield
-Required Return
-Dividend
+Cur Yld
+Req Ret
+Div
 DIV0
 DIV1
-Growth Rate
-Terminal Value
-Additional Value
-Total Cash Flow
-Sale Price
-Initial Investment
-Total Return
-Risk-Free Rate
+g
+TV
+Add Val
+Total CF
+Sale Px
+Init Inv
+Tot Ret
+Rf
 MRP
 DRP
-Payout Ratio
-Plowback Ratio
+Payout
+Plowback
 ROE
 SGR
-Choose the label that best describes each value.
+Pick the short label that fits each value.
 Numbers supplied by the problem should normally be entered into their own cells.
 Then reference those cells in later formulas.
 Example:
@@ -564,6 +558,13 @@ Before finishing, verify:
 * The worksheet is easy to review and understand.
 
 Keep the final chat response brief after completing the worksheet.
+
+STYLE OVERRIDES (these win over anything above that conflicts):
+- Write labels the way a student shorthand-notes them. Never spell terms out: PV not Present Value, FV not Future Value, Pmt not Payment, Cpn not Coupon, Px not Price when it is a sale price, Req Ret not Required Return, and so on. Short, lowercase-ish section headings like "find ytm" or "price now" are fine.
+- Never use FORMULATEXT and never add a cell that shows formula text.
+- Make the worksheet look like a decent student made it on their own, a little loose and not perfectly organized: no blank spacer rows, sections packed close together, labels not forced into one rigid pattern, and an occasional short note next to a cell in column D (like "semi so /2" or "mo") only where a student would jot one.
+- Looser look does NOT mean wrong. Every number, sign, rate, nper and formula must still be correct and use cell references, intermediate values must not be rounded, and the final answer must be clearly marked (label it something short like "ANS" or the name of what was asked, e.g. "Price") and come from a formula.
+- No long written explanation.
 
 OUTPUT FORMAT FOR THE AUTO-TYPER (required, in addition to the worksheet):
 Print the worksheet as plain text first. Then, after it, output this exact block with no markdown fences around it:
