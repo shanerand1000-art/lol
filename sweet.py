@@ -3,7 +3,7 @@
 Sweet -- Finance Screenshot Analyzer
 ======================================
 Install dependencies:
-  pip install google-generativeai Pillow keyboard pyautogui pyperclip
+  pip install google-genai Pillow keyboard pyautogui pyperclip
 
 Set your Gemini API key (required):
   Windows:    set GEMINI_API_KEY=your_key_here
@@ -36,9 +36,10 @@ import tkinter as tk
 # ─── dependency check ──────────────────────────────────────────────────────────
 _need = []
 try:
-    import google.generativeai as genai
+    from google import genai
+    from google.genai import types as genai_types
 except ImportError:
-    _need.append("google-generativeai")
+    _need.append("google-genai")
 try:
     from PIL import ImageGrab
 except ImportError:
@@ -65,7 +66,17 @@ if _need:
 
 # ─── configuration ─────────────────────────────────────────────────────────────
 API_KEY          = os.environ.get("GEMINI_API_KEY", "")
-MODEL_NAME       = "gemini-2.0-flash"   # user requested "Gemini 3.6 Flash" -- using closest available
+# Newest first. Override the first choice with:  set SWEET_MODEL=gemini-3.8-flash
+# If a model is unavailable for your key, Sweet automatically tries the next one.
+MODEL_CHAIN      = [
+    m for m in [
+        os.environ.get("SWEET_MODEL", "").strip(),
+        "gemini-3.8-flash",
+        "gemini-3.7-flash",
+        "gemini-3.5-flash",
+        "gemini-3-flash-preview",
+    ] if m
+]
 HOTKEY_ANALYZE   = "ctrl+shift+s"
 HOTKEY_TYPE      = "ctrl+shift+t"
 HOTKEY_QUIT      = "ctrl+shift+q"
@@ -306,14 +317,33 @@ def analyze(win: SweetWindow):
         screenshot = ImageGrab.grab()
         win.root.after(0, win.root.deiconify)
 
-        genai.configure(api_key=API_KEY)
-        model = genai.GenerativeModel(MODEL_NAME, system_instruction=SYSTEM_PROMPT)
-
-        print("[Sweet] Sending screenshot to Gemini...")
-        resp  = model.generate_content([
+        client = genai.Client(api_key=API_KEY)
+        config = genai_types.GenerateContentConfig(
+            system_instruction=SYSTEM_PROMPT,
+            temperature=0.0,
+        )
+        contents = [
             "Analyze the finance problem shown in this screenshot and produce the Excel worksheet:",
             screenshot,
-        ])
+        ]
+
+        resp, last_err = None, None
+        for model_name in MODEL_CHAIN:
+            try:
+                print(f"[Sweet] Sending screenshot to {model_name}...")
+                resp = client.models.generate_content(
+                    model=model_name, contents=contents, config=config
+                )
+                break
+            except Exception as e:
+                last_err = e
+                msg = str(e).lower()
+                if "404" in msg or "not found" in msg or "not supported" in msg:
+                    print(f"[Sweet] {model_name} unavailable, trying next model...")
+                    continue
+                raise
+        if resp is None:
+            raise RuntimeError(f"No Gemini model available: {last_err}")
         text  = resp.text
         cells = _extract_cells(text)
 
