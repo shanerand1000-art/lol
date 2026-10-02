@@ -564,6 +564,7 @@ STYLE OVERRIDES (these win over anything above that conflicts):
 - Never use FORMULATEXT and never add a cell that shows formula text.
 - Make the worksheet look like a decent student made it on their own, a little loose and not perfectly organized: no blank spacer rows, sections packed close together, labels not forced into one rigid pattern, and an occasional short note next to a cell in column D (like "semi so /2" or "mo") only where a student would jot one.
 - Looser look does NOT mean wrong. Every number, sign, rate, nper and formula must still be correct and use cell references, intermediate values must not be rounded, and the final answer must be clearly marked (label it something short like "ANS" or the name of what was asked, e.g. "Price") and come from a formula.
+- LAYOUT RULE: the worksheet starts at B2. Column A and row 1 must stay completely empty. Never put anything in column A or row 1, not labels, not a stray 0, not timeline markers or year numbers. Labels go in column B, values in column C, optional notes in column D. For a timeline of years, run it across row 2 or down column B starting at B2 and never use A1 or A2 for a marker.
 - No long written explanation.
 
 OUTPUT FORMAT FOR THE AUTO-TYPER (required, in addition to the worksheet):
@@ -765,6 +766,9 @@ def _extract_cells(text: str) -> list:
             continue
         if val != "":
             cells[addr] = val          # last entry for an address wins
+    stray = [a for a in cells if a.startswith("A") and a[1:].isdigit() or _addr_key(a)[0] == 1]
+    if stray:
+        log(f"[Sweet] Heads up: Gemini put cells in column A / row 1: {', '.join(sorted(stray))}")
     return sorted(cells.items(), key=lambda kv: _addr_key(kv[0]))
 
 
