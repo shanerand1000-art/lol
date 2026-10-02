@@ -642,8 +642,9 @@ class SweetWindow:
     All Tk calls happen on the main thread; other threads post work with call().
     """
 
-    DOT_SIZE = 14
-    PAD      = 2
+    DOT_SIZE = 6              # tiny dot
+    PAD      = 5
+    KEY      = "#010101"     # made fully transparent on Windows
 
     def __init__(self, taskbar: bool):
         self.taskbar = taskbar
@@ -680,17 +681,21 @@ class SweetWindow:
         else:
             r.overrideredirect(True)            # no title bar, not in the taskbar
             r.wm_attributes("-topmost", True)
+            try:
+                r.wm_attributes("-transparentcolor", self.KEY)   # Windows: no background
+            except tk.TclError:
+                pass
             sz = self.DOT_SIZE + self.PAD * 2
-            r.geometry(f"{sz}x{sz}+{sw - sz - 3}+3")
-            r.configure(bg="#000000")
-            cv = tk.Canvas(r, width=sz, height=sz, bg="#000000", highlightthickness=0)
+            r.geometry(f"{sz}x{sz}+{sw - sz - 1}+1")
+            r.configure(bg=self.KEY)
+            cv = tk.Canvas(r, width=sz, height=sz, bg=self.KEY, highlightthickness=0, bd=0)
             cv.pack()
             self._cv  = cv
             self._dot = cv.create_oval(self.PAD, self.PAD,
                                        self.PAD + self.DOT_SIZE, self.PAD + self.DOT_SIZE,
-                                       fill="#2a2a2a", outline="")
-            self._txt = cv.create_text(sz // 2, sz // 2, text="", fill="white",
-                                       font=("Arial", 8, "bold"))
+                                       fill=self.KEY, outline="")
+            self._txt = cv.create_text(sz // 2, sz // 2, text="", fill="#FF3333",
+                                       font=("Arial", 10, "bold"))
             r.withdraw()
 
     # ── thread-safe plumbing ────────────────────────────────────────────────────
@@ -738,7 +743,7 @@ class SweetWindow:
             self._phase, self._dir = 0.0, 1.0
             self._tick()
         else:
-            self._cv.itemconfig(self._dot, fill="#FF3333")
+            self._cv.itemconfig(self._dot, fill=self.KEY)     # just a small red ! , no circle
             self._cv.itemconfig(self._txt, text="!")
 
     def _tick(self):
