@@ -124,7 +124,7 @@ TYPE_CHAR_DELAY  = 0.5    # seconds between typed characters
 CELL_PAUSE       = 0.5    # seconds between finishing one cell and moving to the next
 RESYNC_EVERY     = 20     # go back to A1 to re-sync after this many cells (0 = never)
 LOG_FILE         = os.path.join(HERE, "sweet.log")
-VERSION          = "v13 - clipboard off by default"
+VERSION          = "v14 - slide-method override"
 LOWERCASE_ALL    = True   # type and copy everything in lowercase (pv, div1, fv ...)
 COPY_TO_CLIPBOARD = False # True = also copy the result to the clipboard; False = never touch it (typer still works)
 
@@ -1034,6 +1034,36 @@ Amortization problem = table only when needed.
 Never add extra structure just because Excel allows it.
 
 ==================================================
+SLIDE-METHOD OVERRIDE
+==================================================
+
+The methods in this prompt are intended to match the methods taught in the finance slides.
+
+Do NOT replace the listed method with a different mathematically equivalent method just because it gives the same answer.
+
+Important:
+
+- Uneven cash flows asking for PRESENT VALUE:
+  discount the future CFs to today; NPV is allowed when the same rate applies. Keep any time-0 CF outside NPV.
+
+- Uneven cash flows asking for FUTURE VALUE:
+  treat each CF as its own lump sum, compound each one forward to the requested ending date, then add them together.
+  Do NOT find NPV first and then convert NPV to FV.
+
+- Loan total interest:
+  find PMT first, then Total Payments = PMT*n, then Total Interest = Total Payments-PV.
+
+- Bond price:
+  use the PV setup taught in the prompt.
+
+- Bond YTM:
+  use RATE, then annualize it if needed.
+
+- If the question explicitly tells you to round an intermediate value before continuing, follow that instruction even though the normal rule is to keep full precision.
+
+Before solving, always use the specific method assigned to that question type in this prompt rather than choosing another shortcut.
+
+==================================================
 MULTIPLE CHOICE QUESTIONS
 ==================================================
 
@@ -1061,7 +1091,7 @@ Formula cells start with = exactly as typed in Excel. Put only cell contents in 
 Keep column A and row 1 completely empty: no labels, no stray 0, no year or timeline numbers there. Start the worksheet in column B at row 2 or lower. For a timeline, put the year numbers in a row below row 1 starting at column C, with the row labels in column B.
 Follow the short label style above (r, n, PV, FV, PMT, CF, P0, Sale Px). Never use FORMULATEXT.
 Never use dollar signs in formulas (no locked or absolute references like $C$3 or C$3). Write plain references like C3, and ignore the $ in the examples above. Every formula is typed into its own cell, so nothing needs locking.
-EXCEL FUNCTION RULE: Only use the Excel functions that are listed in the prompt above: PV, FV, RATE, NPER, PMT, IPMT, PPMT, NPV, EFFECT, NOMINAL, EXP, SUM, plus DATE, PRICE and YIELD for bond-date problems, along with normal arithmetic. Never use any other function (no IRR, XNPV, FVSCHEDULE, POWER, ROUND and so on). Use a listed function when the problem actually calls for it: a time value of money step (present value, future value, rate, number of periods, payment, loan or bond price/yield) should use the matching function, such as =FV(0.08,5,,-1000) or =PV(0.08,2,,3000), instead of hand-written math like =1000*(1+0.08)^5. Where the prompt uses a plain formula instead, use that plain formula and do not force a function: perpetuities (=PMT/r), Gordon growth, dividend timelines (discounting a dividend with =PV(r,year,,CF) or /(1+r)^year is fine), HPR, current yield, payout/plowback/SGR, and similar. Keep the usual signs (money out negative, money in positive) and leave unused function arguments blank.
+EXCEL FUNCTION RULE: Only use the Excel functions that are listed in the prompt above: PV, FV, RATE, NPER, PMT, IPMT, PPMT, NPV, EFFECT, NOMINAL, EXP, SUM, plus DATE, PRICE and YIELD for bond-date problems, along with normal arithmetic. Never use any other function (no IRR, XNPV, FVSCHEDULE, POWER and so on). The one exception is ROUND, and only when the question explicitly tells you to round an intermediate value before continuing. Use a listed function when the problem actually calls for it: a time value of money step (present value, future value, rate, number of periods, payment, loan or bond price/yield) should use the matching function, such as =FV(0.08,5,,-1000) or =PV(0.08,2,,3000), instead of hand-written math like =1000*(1+0.08)^5. Where the prompt uses a plain formula instead, use that plain formula and do not force a function: perpetuities (=PMT/r), Gordon growth, dividend timelines (discounting a dividend with =PV(r,year,,CF) or /(1+r)^year is fine), HPR, current yield, payout/plowback/SGR, and similar. Keep the usual signs (money out negative, money in positive) and leave unused function arguments blank.
 Use valid JSON (double quotes, no trailing commas) and do not wrap the block in code fences.
 """
 
