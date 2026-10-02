@@ -1027,6 +1027,22 @@ Amortization problem = table only when needed.
 
 Never add extra structure just because Excel allows it.
 
+==================================================
+MULTIPLE CHOICE QUESTIONS
+==================================================
+
+If the screenshot shows a multiple choice question with lettered options (A, B, C, D, E):
+
+1. If answering it needs NO calculation (it is a concept, definition, or "which statement is true" question), do NOT build a worksheet and do NOT output the AUTO_TYPE_JSON block. Output only the letter of the correct choice in this exact form:
+
+ANSWER_START
+C
+ANSWER_END
+
+Use the letter only (for example C). If the question says to select all that apply, list the letters separated by commas (for example A, C). No explanation.
+
+2. If answering it needs calculation, build the worksheet and the AUTO_TYPE_JSON block exactly as described in the other sections, and after the AUTO_TYPE_JSON block also output the letter of the choice that matches your computed answer, in the same ANSWER_START / ANSWER_END form. If none of the choices match your result, still output the worksheet and leave the ANSWER block out.
+
 OUTPUT FORMAT FOR THE AUTO-TYPER (this replaces "fill the Excel cells" and "reply only Done" above):
 You cannot edit Excel directly here. Instead, print the finished worksheet as short plain text first. Then output this exact block, with no markdown fences around it:
 
@@ -1257,6 +1273,15 @@ def _stray_cells(cells: list) -> list:
     return out
 
 
+def _extract_answer(text: str) -> str:
+    """Letter(s) from an ANSWER_START ... ANSWER_END block, or ''."""
+    m = re.search(r"ANSWER_START\s*([A-Za-z](?:\s*[,;/ ]\s*[A-Za-z])*)\s*ANSWER_END", text, re.IGNORECASE)
+    if not m:
+        return ""
+    letters = re.findall(r"[A-Za-z]", m.group(1))
+    return ", ".join(l.upper() for l in letters)
+
+
 def _num_to_col(n: int) -> str:
     s = ""
     while n:
@@ -1346,24 +1371,35 @@ def analyze(win: SweetWindow):
             if _stray_cells(cells):
                 log(f"[Sweet] WARNING: still cells in column A / row 1: {', '.join(_stray_cells(cells))}")
         clean = re.sub(r"AUTO_TYPE_JSON_START[\s\S]*?AUTO_TYPE_JSON_END", "",
-                       text, flags=re.IGNORECASE).strip()
+                       text, flags=re.IGNORECASE)
+        clean = re.sub(r"ANSWER_START[\s\S]*?ANSWER_END", "", clean, flags=re.IGNORECASE).strip()
+        answer = _extract_answer(text)
 
         log("\n" + "=" * 66)
         log(clean)
         log("=" * 66)
 
-        if not cells:
-            pyperclip.copy(clean)
-            raise RuntimeError("Gemini returned no cell data for the auto-typer "
-                               "(worksheet text was copied instead). Try again.")
+        if not cells and answer:
+            with _lock:
+                _cells = []
+            pyperclip.copy(answer)
+            log(f"[Sweet] Multiple choice answer: {answer}  (copied to clipboard)")
+            success = True
+        else:
+            if not cells:
+                pyperclip.copy(clean)
+                raise RuntimeError("Gemini returned no cell data for the auto-typer "
+                                   "(worksheet text was copied instead). Try again.")
 
-        with _lock:
-            _cells = cells
-        pyperclip.copy(_to_clipboard_grid(cells))
-        chars = sum(len(v) for _, v in cells)
-        log(f"[Sweet] Copied {len(cells)} cells to clipboard.  "
-            f"{HOTKEY_TYPE.upper()} auto-types them (~{chars * TYPE_CHAR_DELAY / 60:.1f} min).")
-        success = True
+            with _lock:
+                _cells = cells
+            pyperclip.copy(_to_clipboard_grid(cells))
+            chars = sum(len(v) for _, v in cells)
+            log(f"[Sweet] Copied {len(cells)} cells to clipboard.  "
+                f"{HOTKEY_TYPE.upper()} auto-types them (~{chars * TYPE_CHAR_DELAY / 60:.1f} min).")
+            if answer:
+                log(f"[Sweet] Matching choice: {answer}")
+            success = True
 
     except Exception as exc:
         log(f"\n[Sweet] ERROR: {exc}")
