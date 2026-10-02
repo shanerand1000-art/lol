@@ -120,6 +120,7 @@ TYPE_CHAR_DELAY  = 0.5    # seconds between typed characters
 CELL_PAUSE       = 0.5    # seconds between finishing one cell and moving to the next
 RESYNC_EVERY     = 20     # go back to A1 to re-sync after this many cells (0 = never)
 LOG_FILE         = os.path.join(HERE, "sweet.log")
+VERSION          = "v8 - cell-to-cell navigation (Ctrl+Enter)"
 
 # ─── system prompt (the full finance worksheet prompt) ─────────────────────────
 SYSTEM_PROMPT = """You are an Excel finance worksheet assistant.
@@ -1489,6 +1490,7 @@ def register_hotkeys(win: SweetWindow):
     keyboard.add_hotkey(HOTKEY_QUIT,
                         lambda: (_stop.set(), keyboard.unhook_all(), win.call(win.root.quit)),
                         suppress=True)
+    log(f"[Sweet] {VERSION}")
     log(f"[Sweet] Running.  {HOTKEY_ANALYZE.upper()} analyze | {HOTKEY_TYPE.upper()} auto-type | "
         f"{HOTKEY_STOP.upper()} stop | {HOTKEY_QUIT.upper()} quit")
 
