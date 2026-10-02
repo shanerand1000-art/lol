@@ -18,7 +18,8 @@ Hotkeys (system-wide):
   `  (backtick key, left of 1; Ctrl+Shift+S also works)
                 screenshot -> Gemini -> answer copied to clipboard
                 dot in top-right = working; dot gone = done and copied; red ! = error
-  Ctrl+Shift+T  auto-type the worksheet into Excel, one character every 0.5 s
+  ~  (Shift + backtick; Ctrl+Shift+T also works)
+                auto-type the worksheet into Excel, one character every 0.5 s
   Ctrl+Shift+X  stop the auto-typer immediately
   Ctrl+Shift+Q  quit Sweet
 
@@ -113,7 +114,8 @@ MODEL_CHAIN = [
 
 HOTKEY_ANALYZE = "`"             # the backtick key (left of 1): screenshot + answer
 HOTKEY_ANALYZE_ALT = "ctrl+shift+s"   # backup shortcut
-HOTKEY_TYPE    = "ctrl+shift+t"
+HOTKEY_TYPE    = "shift+`"            # the ~ key: auto-type into Excel
+HOTKEY_TYPE_ALT = "ctrl+shift+t"      # backup shortcut
 HOTKEY_STOP    = "ctrl+shift+x"
 HOTKEY_QUIT    = "ctrl+shift+q"
 
@@ -122,7 +124,7 @@ TYPE_CHAR_DELAY  = 0.5    # seconds between typed characters
 CELL_PAUSE       = 0.5    # seconds between finishing one cell and moving to the next
 RESYNC_EVERY     = 20     # go back to A1 to re-sync after this many cells (0 = never)
 LOG_FILE         = os.path.join(HERE, "sweet.log")
-VERSION          = "v10 - backtick key"
+VERSION          = "v11 - ` analyze, ~ type"
 LOWERCASE_ALL    = True   # type and copy everything in lowercase (pv, div1, fv ...)
 
 # ─── system prompt (the full finance worksheet prompt) ─────────────────────────
@@ -1401,7 +1403,7 @@ def analyze(win: SweetWindow):
             pyperclip.copy(_to_clipboard_grid(cells))
             chars = sum(len(v) for _, v in cells)
             log(f"[Sweet] Copied {len(cells)} cells to clipboard.  "
-                f"{HOTKEY_TYPE.upper()} auto-types them (~{chars * TYPE_CHAR_DELAY / 60:.1f} min).")
+                f"press ~ to auto-type them (~{chars * TYPE_CHAR_DELAY / 60:.1f} min).")
             if answer:
                 log(answer)
             success = True
@@ -1525,18 +1527,27 @@ def _spawn(fn, win):
 
 
 def register_hotkeys(win: SweetWindow):
-    for hk in (HOTKEY_ANALYZE, HOTKEY_ANALYZE_ALT):
+    def on_backtick():
+        if keyboard.is_pressed("shift"):
+            return                      # that is ~ (shift+`), which belongs to the typer
+        _spawn(analyze, win)
+
+    def register(hk, cb):
         try:
-            keyboard.add_hotkey(hk, lambda: _spawn(analyze, win), suppress=True)
+            keyboard.add_hotkey(hk, cb, suppress=True)
         except Exception as e:
             log(f"[Sweet] Could not register hotkey {hk!r}: {e}")
-    keyboard.add_hotkey(HOTKEY_TYPE,    lambda: _spawn(auto_type, win), suppress=True)
+
+    register(HOTKEY_ANALYZE, on_backtick)
+    register(HOTKEY_ANALYZE_ALT, lambda: _spawn(analyze, win))
+    register(HOTKEY_TYPE, lambda: _spawn(auto_type, win))
+    register(HOTKEY_TYPE_ALT, lambda: _spawn(auto_type, win))
     keyboard.add_hotkey(HOTKEY_STOP,    _stop.set, suppress=True)
     keyboard.add_hotkey(HOTKEY_QUIT,
                         lambda: (_stop.set(), keyboard.unhook_all(), win.call(win.root.quit)),
                         suppress=True)
     log(f"[Sweet] {VERSION}")
-    log(f"[Sweet] Running.  {HOTKEY_ANALYZE} (or {HOTKEY_ANALYZE_ALT.upper()}) analyze | {HOTKEY_TYPE.upper()} auto-type | "
+    log(f"[Sweet] Running.  ` analyze (or {HOTKEY_ANALYZE_ALT.upper()}) | ~ auto-type (or {HOTKEY_TYPE_ALT.upper()}) | "
         f"{HOTKEY_STOP.upper()} stop | {HOTKEY_QUIT.upper()} quit")
 
 
