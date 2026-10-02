@@ -153,21 +153,21 @@ Future Value
 Number of Periods
 Payment Amount
 Use the short finance terminology above.
-For other items, use short natural labels such as:
-Annual coupon
-Coupon rate
-Par value
-Current yield
-Required return
-Dividend
-Growth rate
-Sale price
-Total cash flow
+For other items, use short abbreviated slang labels, never full words, such as:
+Ann cpn
+Cpn rate
+Par
+Cur yld
+Req ret
+Div
+g
+Sale px
+Total CF
 Price
-Price right now
-Price, end of Year 5
-Payout ratio
-Plowback ratio
+Price now
+Price Yr 5
+Payout
+Plowback
 For a normal TVM problem, use columns B, C and sometimes D.
 Typical setup:
 B3 VARIABLES
@@ -185,17 +185,7 @@ C8 [value/formula]
 B9 Type
 C9 [value if needed]
 The unknown variable gets the solving formula.
-Column D may show the formula for an important calculated cell using:
-=FORMULATEXT(C8)
-Do NOT use FORMULATEXT beside every single cell.
-Use it mainly beside:
-
-* the main answer
-* an important PMT
-* an important PV/FV
-* RATE/YTM
-* an important intermediate calculation
-
+Never use FORMULATEXT. Column D stays empty unless a very short note is truly needed.
 Leave one or two blank rows between separate calculation blocks.
 Do not create a separate cell for every number just because it appeared in the problem.
 Short helper calculations can use the given number directly.
@@ -801,7 +791,8 @@ AUTO_TYPE_JSON_END
 
 List EVERY cell that should contain something, with its address and exact contents, in the order it should be typed.
 Formula cells start with = exactly as typed in Excel. Put only the cell contents in the JSON: no formatting, no dollar signs or percent signs or thousands commas in numbers (write rates as decimals like 0.05).
-Keep column A and row 1 completely empty; start the worksheet in column B.
+Keep column A and row 1 completely empty. Nothing goes in column A or row 1: no labels, no stray 0, no year or timeline numbers. Start the worksheet in column B at row 3 or lower. For a timeline, put the year numbers in a row below row 1, starting at column C, with the row labels in column B.
+Every label must be a short abbreviation (PV, PMT, Cpn rate, Req ret, Sale px, Total CF), never a full spelled-out phrase. Never use FORMULATEXT.
 Use valid JSON (double quotes, no trailing commas) and do not wrap the block in code fences.
 """
 
@@ -992,10 +983,17 @@ def _extract_cells(text: str) -> list:
             continue
         if val != "":
             cells[addr] = val          # last entry for an address wins
-    stray = [a for a in cells if a.startswith("A") and a[1:].isdigit() or _addr_key(a)[0] == 1]
-    if stray:
-        log(f"[Sweet] Heads up: Gemini put cells in column A / row 1: {', '.join(sorted(stray))}")
     return sorted(cells.items(), key=lambda kv: _addr_key(kv[0]))
+
+
+def _stray_cells(cells: list) -> list:
+    """Addresses in column A or row 1 (the worksheet must start at B2 or lower)."""
+    out = []
+    for addr, _ in cells:
+        row, col = _addr_key(addr)
+        if row == 1 or col == 1:
+            out.append(addr)
+    return out
 
 
 def _num_to_col(n: int) -> str:
@@ -1022,6 +1020,25 @@ def _to_clipboard_grid(cells: list) -> str:
 
 
 # ─── Gemini screenshot analysis ────────────────────────────────────────────────
+def _generate(client, config, contents) -> str:
+    """Call the newest available Gemini model and return the reply text."""
+    last_err = None
+    for model_name in MODEL_CHAIN:
+        try:
+            log(f"[Sweet] Asking {model_name}...")
+            resp = client.models.generate_content(model=model_name,
+                                                  contents=contents, config=config)
+            return resp.text or ""
+        except Exception as e:
+            last_err = e
+            m = str(e).lower()
+            if "404" in m or "not found" in m or "not supported" in m:
+                log(f"[Sweet] {model_name} unavailable, trying next model...")
+                continue
+            raise
+    raise RuntimeError(f"No Gemini model available: {last_err}")
+
+
 def analyze(win: SweetWindow):
     global _busy, _cells
 
@@ -1049,25 +1066,24 @@ def analyze(win: SweetWindow):
         contents = ["Analyze the finance problem shown in this screenshot and produce "
                     "the Excel worksheet:", screenshot]
 
-        resp, last_err = None, None
-        for model_name in MODEL_CHAIN:
-            try:
-                log(f"[Sweet] Sending screenshot to {model_name}...")
-                resp = client.models.generate_content(model=model_name,
-                                                      contents=contents, config=config)
-                break
-            except Exception as e:
-                last_err = e
-                m = str(e).lower()
-                if "404" in m or "not found" in m or "not supported" in m:
-                    log(f"[Sweet] {model_name} unavailable, trying next model...")
-                    continue
-                raise
-        if resp is None:
-            raise RuntimeError(f"No Gemini model available: {last_err}")
-
-        text  = resp.text or ""
+        text  = _generate(client, config, contents)
         cells = _extract_cells(text)
+
+        stray = _stray_cells(cells)
+        if stray:
+            log(f"[Sweet] Gemini used column A / row 1 ({', '.join(stray)}); asking it to redo...")
+            fix = contents + [
+                "Your previous answer was:\n" + text,
+                "That put cells in column A or row 1 (" + ", ".join(stray) + "). Redo the ENTIRE answer "
+                "with nothing in column A or row 1: start in column B at row 3 or lower, and update "
+                "every formula reference to match the new cell positions. Same output format as before.",
+            ]
+            text2  = _generate(client, config, fix)
+            cells2 = _extract_cells(text2)
+            if cells2 and len(_stray_cells(cells2)) < len(stray):
+                text, cells = text2, cells2
+            if _stray_cells(cells):
+                log(f"[Sweet] WARNING: still cells in column A / row 1: {', '.join(_stray_cells(cells))}")
         clean = re.sub(r"AUTO_TYPE_JSON_START[\s\S]*?AUTO_TYPE_JSON_END", "",
                        text, flags=re.IGNORECASE).strip()
 
