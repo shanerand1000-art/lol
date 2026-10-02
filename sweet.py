@@ -1,36 +1,38 @@
 #!/usr/bin/env python3
 """
-Sweet -- Finance Screenshot Analyzer
-======================================
-Install dependencies:
+Sweet -- Finance Screenshot -> Excel worksheet
+===============================================
+Install:
   pip install google-genai Pillow keyboard pyautogui pyperclip
 
-Set your Gemini API key (required):
-  Windows:    set GEMINI_API_KEY=your_key_here
-  Mac/Linux:  export GEMINI_API_KEY=your_key_here
+API key (either one):
+  * put it in a file named sweet_key.txt next to this script, OR
+  * set the GEMINI_API_KEY environment variable
 
-Run (background dot only, no taskbar entry):
-  python sweet.py
+Run:
+  python sweet.py             background mode: tiny dot only, no taskbar entry
+  python sweet.py --taskbar   same, plus a small status bar in the taskbar
+  (double-click sweet_background.pyw / sweet_taskbar.pyw to run with no console window)
 
-Run (status bar visible in taskbar):
-  python sweet.py --taskbar
+Hotkeys (system-wide):
+  Ctrl+Shift+S  screenshot -> Gemini -> worksheet copied to clipboard
+                dot in top-right = working; dot gone = done and copied; red ! = error
+  Ctrl+Shift+T  auto-type the worksheet into Excel, one character every 0.5 s
+  Ctrl+Shift+X  stop the auto-typer immediately
+  Ctrl+Shift+Q  quit Sweet
 
-Hotkeys (work system-wide):
-  Ctrl+Shift+S  ->  Screenshot + analyze finance problem
-  Ctrl+Shift+T  ->  Auto-type last result into Excel (you have 3 sec to focus Excel)
-  Ctrl+Shift+Q  ->  Quit Sweet
-
-Note: On Windows the keyboard library usually works without admin rights.
-      On Linux it requires root (sudo python sweet.py).
+Clipboard format: tab-separated grid laid out by cell address. Click cell A1 in Excel
+and press Ctrl+V to drop the whole worksheet (formulas included) in the right cells.
 """
 
 import sys
 import os
-import time
-import threading
-import json
 import re
+import json
+import time
+import queue
 import argparse
+import threading
 import tkinter as tk
 
 # ─── dependency check ──────────────────────────────────────────────────────────
@@ -50,7 +52,7 @@ except ImportError:
     _need.append("keyboard")
 try:
     import pyautogui
-    pyautogui.FAILSAFE = True
+    pyautogui.FAILSAFE = True      # slam the mouse into a screen corner to abort typing
     pyautogui.PAUSE = 0.0
 except ImportError:
     _need.append("pyautogui")
@@ -64,11 +66,33 @@ if _need:
     print(f"  pip install {' '.join(_need)}")
     sys.exit(1)
 
+# Correct dot placement / screenshot size on scaled Windows displays
+try:
+    import ctypes
+    ctypes.windll.shcore.SetProcessDpiAwareness(1)
+except Exception:
+    pass
+
 # ─── configuration ─────────────────────────────────────────────────────────────
-API_KEY          = os.environ.get("GEMINI_API_KEY", "")
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def _load_api_key() -> str:
+    key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if key:
+        return key
+    try:
+        with open(os.path.join(HERE, "sweet_key.txt"), encoding="utf-8") as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+API_KEY = _load_api_key()
+
 # Newest first. Override the first choice with:  set SWEET_MODEL=gemini-3.8-flash
 # If a model is unavailable for your key, Sweet automatically tries the next one.
-MODEL_CHAIN      = [
+MODEL_CHAIN = [
     m for m in [
         os.environ.get("SWEET_MODEL", "").strip(),
         "gemini-3.8-flash",
@@ -77,11 +101,17 @@ MODEL_CHAIN      = [
         "gemini-3-flash-preview",
     ] if m
 ]
-HOTKEY_ANALYZE   = "ctrl+shift+s"
-HOTKEY_TYPE      = "ctrl+shift+t"
-HOTKEY_QUIT      = "ctrl+shift+q"
-TYPE_START_DELAY = 3       # seconds before auto-type starts (time to focus Excel)
-CELL_PAUSE       = 0.15    # pause between each cell during auto-type (seconds)
+
+HOTKEY_ANALYZE = "ctrl+shift+s"
+HOTKEY_TYPE    = "ctrl+shift+t"
+HOTKEY_STOP    = "ctrl+shift+x"
+HOTKEY_QUIT    = "ctrl+shift+q"
+
+TYPE_START_DELAY = 3      # seconds to click into Excel after pressing the type hotkey
+TYPE_CHAR_DELAY  = 0.5    # seconds between typed characters
+CELL_PAUSE       = 0.5    # seconds between finishing one cell and moving to the next
+NAV_KEY_DELAY    = 0.03   # per-character delay when typing a cell address (navigation only)
+LOG_FILE         = os.path.join(HERE, "sweet.log")
 
 # ─── system prompt (the full finance worksheet prompt) ─────────────────────────
 SYSTEM_PROMPT = """You are an Excel-based finance practice assistant.
@@ -541,32 +571,43 @@ Do not wrap this block in code fences.
 """
 
 # ─── shared state ──────────────────────────────────────────────────────────────
-_lock  = threading.Lock()
-_busy  = False       # True while an analysis is running
-_cells = []          # [(addr, value), ...] from last successful analysis
+_lock   = threading.Lock()
+_busy   = False                 # an analysis or auto-type run is in progress
+_cells  = []                    # [(addr, value), ...] from the last analysis
+_stop   = threading.Event()     # set by HOTKEY_STOP to abort auto-typing
+
+
+def log(msg: str = ""):
+    print(msg)
+    try:
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(msg + "\n")
+    except OSError:
+        pass
 
 
 # ─── UI window ─────────────────────────────────────────────────────────────────
 class SweetWindow:
     """
-    Background mode (default):
-      Tiny animated dot in the top-right corner. No taskbar entry.
-      Hidden when idle, orange pulsing dot while working, red ! on error.
+    Background mode (default): a tiny dot in the top-right corner, no taskbar entry.
+      hidden = idle / done,  orange pulsing = working,  red "!" = error
+    Taskbar mode (--taskbar): a slim status bar that also shows in the taskbar.
 
-    Taskbar mode (--taskbar):
-      Slim status bar in the top-right corner, visible in the taskbar.
-      Text label changes color to reflect state.
+    All Tk calls happen on the main thread; other threads post work with call().
     """
 
-    DOT_SIZE = 20
+    DOT_SIZE = 14
+    PAD      = 2
 
     def __init__(self, taskbar: bool):
         self.taskbar = taskbar
         self.root    = tk.Tk()
         self._state  = "idle"
-        self._phase  = 0.0    # animation pulse 0.0-1.0
-        self._dir    = 1.0    # animation direction
+        self._phase  = 0.0
+        self._dir    = 1.0
+        self._q      = queue.Queue()
         self._build()
+        self.root.after(40, self._poll)
 
     def _build(self):
         r  = self.root
@@ -580,64 +621,72 @@ class SweetWindow:
             r.geometry(f"{w}x{h}+{sw - w - 6}+6")
             r.configure(bg="#111111")
             self._var = tk.StringVar(value="Sweet  |  ready")
-            self._lbl = tk.Label(
-                r, textvariable=self._var,
-                bg="#111111", fg="#777777",
-                font=("Consolas", 9), anchor="w", padx=8
-            )
+            self._lbl = tk.Label(r, textvariable=self._var, bg="#111111", fg="#777777",
+                                 font=("Consolas", 9), anchor="w", padx=8)
             self._lbl.pack(fill="both", expand=True)
-
         else:
-            r.overrideredirect(True)           # no title bar, not in taskbar
+            r.overrideredirect(True)            # no title bar, not in the taskbar
             r.wm_attributes("-topmost", True)
-            r.wm_attributes("-alpha", 0.92)
-            pad = 6
-            sz  = self.DOT_SIZE + pad * 2
-            r.geometry(f"{sz}x{sz}+{sw - sz - 4}+4")
+            sz = self.DOT_SIZE + self.PAD * 2
+            r.geometry(f"{sz}x{sz}+{sw - sz - 3}+3")
             r.configure(bg="#000000")
-            cv = tk.Canvas(r, width=sz, height=sz,
-                           bg="#000000", highlightthickness=0)
+            cv = tk.Canvas(r, width=sz, height=sz, bg="#000000", highlightthickness=0)
             cv.pack()
             self._cv  = cv
-            self._dot = cv.create_oval(pad, pad,
-                                       pad + self.DOT_SIZE, pad + self.DOT_SIZE,
+            self._dot = cv.create_oval(self.PAD, self.PAD,
+                                       self.PAD + self.DOT_SIZE, self.PAD + self.DOT_SIZE,
                                        fill="#2a2a2a", outline="")
-            self._txt = cv.create_text(pad + self.DOT_SIZE // 2,
-                                       pad + self.DOT_SIZE // 2,
-                                       text="", fill="white",
-                                       font=("Arial", 9, "bold"))
-            r.withdraw()   # start hidden
+            self._txt = cv.create_text(sz // 2, sz // 2, text="", fill="white",
+                                       font=("Arial", 8, "bold"))
+            r.withdraw()
 
-    # ── public state API ────────────────────────────────────────────────────────
+    # ── thread-safe plumbing ────────────────────────────────────────────────────
+    def call(self, fn):
+        self._q.put(fn)
+
+    def _poll(self):
+        try:
+            while True:
+                self._q.get_nowait()()
+        except queue.Empty:
+            pass
+        self.root.after(40, self._poll)
+
+    def hide(self):
+        """Hide the dot (used before taking a screenshot)."""
+        if not self.taskbar:
+            self.call(self.root.withdraw)
+
     def set_state(self, state: str):
-        """Thread-safe. state in {'idle', 'working', 'error'}"""
+        """state in {'idle', 'working', 'error'}; safe to call from any thread."""
         self._state = state
-        self.root.after(0, self._apply)
+        self.call(self._apply)
 
+    # ── rendering (main thread only) ────────────────────────────────────────────
     def _apply(self):
         s = self._state
         if self.taskbar:
             cfg = {
                 "idle":    ("Sweet  |  ready",    "#777777"),
-                "working": ("Sweet  |  working.", "#FFA020"),
+                "working": ("Sweet  |  working",  "#FFA020"),
                 "error":   ("Sweet  |  error  !", "#FF3333"),
             }
-            txt, col = cfg.get(s, ("Sweet", "#777777"))
+            txt, col = cfg[s]
             self._var.set(txt)
             self._lbl.configure(fg=col)
+            return
+        if s == "idle":
+            self.root.withdraw()
+            return
+        self.root.deiconify()
+        if s == "working":
+            self._cv.itemconfig(self._dot, fill="#FFA500")
+            self._cv.itemconfig(self._txt, text="")
+            self._phase, self._dir = 0.0, 1.0
+            self._tick()
         else:
-            if s == "idle":
-                self.root.withdraw()
-            else:
-                self.root.deiconify()
-                if s == "working":
-                    self._cv.itemconfig(self._dot, fill="#FFA500")
-                    self._cv.itemconfig(self._txt, text="")
-                    self._phase, self._dir = 0.0, 1.0
-                    self._tick()
-                elif s == "error":
-                    self._cv.itemconfig(self._dot, fill="#FF3333")
-                    self._cv.itemconfig(self._txt, text="!")
+            self._cv.itemconfig(self._dot, fill="#FF3333")
+            self._cv.itemconfig(self._txt, text="!")
 
     def _tick(self):
         if self._state != "working":
@@ -653,79 +702,149 @@ class SweetWindow:
         self.root.mainloop()
 
 
+# ─── cell helpers ──────────────────────────────────────────────────────────────
+_ADDR = re.compile(r"^([A-Z]{1,3})(\d{1,7})$")
+
+
+def _col_to_num(col: str) -> int:
+    n = 0
+    for ch in col:
+        n = n * 26 + (ord(ch) - 64)
+    return n
+
+
+def _addr_key(addr: str):
+    m = _ADDR.match(addr)
+    return (int(m.group(2)), _col_to_num(m.group(1)))
+
+
+def _clean_value(v) -> str:
+    s = str(v).strip()
+    for a, b in (("−", "-"), ("–", "-"), ("—", "-"),
+                 ("‘", "'"), ("’", "'"), ("“", '"'), ("”", '"')):
+        s = s.replace(a, b)
+    return s.replace("\t", " ").replace("\r", " ").replace("\n", " ")
+
+
+def _extract_cells(text: str) -> list:
+    """Parse the AUTO_TYPE_JSON block; returns [(addr, value)] sorted top-to-bottom, left-to-right."""
+    m = re.search(r"AUTO_TYPE_JSON_START\s*(\[[\s\S]*?\])\s*AUTO_TYPE_JSON_END",
+                  text, re.IGNORECASE)
+    if not m:
+        log("[Sweet] AUTO_TYPE_JSON block not found in response.")
+        return []
+    try:
+        data = json.loads(m.group(1))
+    except Exception as e:
+        log(f"[Sweet] JSON parse error: {e}")
+        return []
+    cells = {}
+    for item in data:
+        try:
+            addr = str(item["cell"]).strip().upper().replace("$", "")
+            val  = _clean_value(item["value"])
+        except Exception:
+            continue
+        if not _ADDR.match(addr):
+            log(f"[Sweet] Skipping invalid cell address: {addr!r}")
+            continue
+        if val != "":
+            cells[addr] = val          # last entry for an address wins
+    return sorted(cells.items(), key=lambda kv: _addr_key(kv[0]))
+
+
+def _num_to_col(n: int) -> str:
+    s = ""
+    while n:
+        n, r = divmod(n - 1, 26)
+        s = chr(65 + r) + s
+    return s
+
+
+def _to_clipboard_grid(cells: list) -> str:
+    """Tab-separated grid positioned by cell address (A1 is the top-left of the text)."""
+    rows, cols = {}, 0
+    maxrow = 0
+    for addr, val in cells:
+        row, col = _addr_key(addr)
+        rows.setdefault(row, {})[col] = val
+        cols, maxrow = max(cols, col), max(maxrow, row)
+    lines = []
+    for r in range(1, maxrow + 1):
+        cur = rows.get(r, {})
+        lines.append("\t".join(cur.get(c, "") for c in range(1, cols + 1)).rstrip("\t"))
+    return "\n".join(lines)
+
+
 # ─── Gemini screenshot analysis ────────────────────────────────────────────────
 def analyze(win: SweetWindow):
     global _busy, _cells
 
     with _lock:
         if _busy:
-            print("[Sweet] Still working -- please wait.")
+            log("[Sweet] Busy -- wait for the current run to finish.")
             return
         _busy = True
 
-    win.set_state("working")
     success = False
-
     try:
         if not API_KEY:
-            raise RuntimeError(
-                "GEMINI_API_KEY is not set.\n"
-                "  Windows:    set GEMINI_API_KEY=your_key_here\n"
-                "  Mac/Linux:  export GEMINI_API_KEY=your_key_here"
-            )
+            raise RuntimeError("No API key. Put it in sweet_key.txt next to sweet.py "
+                               "or set GEMINI_API_KEY.")
 
-        # Hide overlay briefly so it's not captured in the screenshot
-        win.root.after(0, win.root.withdraw)
-        time.sleep(0.22)
+        # Dot hidden while the picture is taken, then it appears to show work has started.
+        win.hide()
+        time.sleep(0.3)
         screenshot = ImageGrab.grab()
-        win.root.after(0, win.root.deiconify)
+        win.set_state("working")
 
         client = genai.Client(api_key=API_KEY)
-        config = genai_types.GenerateContentConfig(
-            system_instruction=SYSTEM_PROMPT,
-            temperature=0.0,
-        )
-        contents = [
-            "Analyze the finance problem shown in this screenshot and produce the Excel worksheet:",
-            screenshot,
-        ]
+        config = genai_types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT,
+                                                   temperature=0.0)
+        contents = ["Analyze the finance problem shown in this screenshot and produce "
+                    "the Excel worksheet:", screenshot]
 
         resp, last_err = None, None
         for model_name in MODEL_CHAIN:
             try:
-                print(f"[Sweet] Sending screenshot to {model_name}...")
-                resp = client.models.generate_content(
-                    model=model_name, contents=contents, config=config
-                )
+                log(f"[Sweet] Sending screenshot to {model_name}...")
+                resp = client.models.generate_content(model=model_name,
+                                                      contents=contents, config=config)
                 break
             except Exception as e:
                 last_err = e
-                msg = str(e).lower()
-                if "404" in msg or "not found" in msg or "not supported" in msg:
-                    print(f"[Sweet] {model_name} unavailable, trying next model...")
+                m = str(e).lower()
+                if "404" in m or "not found" in m or "not supported" in m:
+                    log(f"[Sweet] {model_name} unavailable, trying next model...")
                     continue
                 raise
         if resp is None:
             raise RuntimeError(f"No Gemini model available: {last_err}")
-        text  = resp.text
+
+        text  = resp.text or ""
         cells = _extract_cells(text)
+        clean = re.sub(r"AUTO_TYPE_JSON_START[\s\S]*?AUTO_TYPE_JSON_END", "",
+                       text, flags=re.IGNORECASE).strip()
+
+        log("\n" + "=" * 66)
+        log(clean)
+        log("=" * 66)
+
+        if not cells:
+            pyperclip.copy(clean)
+            raise RuntimeError("Gemini returned no cell data for the auto-typer "
+                               "(worksheet text was copied instead). Try again.")
 
         with _lock:
             _cells = cells
-
-        clean = re.sub(
-            r"AUTO_TYPE_JSON_START[\s\S]*?AUTO_TYPE_JSON_END", "", text, flags=re.IGNORECASE
-        ).strip()
-        print("\n" + "=" * 66)
-        print(clean)
-        print("=" * 66)
-        print(f"[Sweet] {len(cells)} cells ready.  "
-              f"Press {HOTKEY_TYPE.upper()} to auto-type into Excel.")
-
+        pyperclip.copy(_to_clipboard_grid(cells))
+        chars = sum(len(v) for _, v in cells)
+        log(f"[Sweet] Copied {len(cells)} cells to clipboard.  "
+            f"{HOTKEY_TYPE.upper()} auto-types them (~{chars * TYPE_CHAR_DELAY / 60:.1f} min).")
         success = True
 
     except Exception as exc:
-        print(f"\n[Sweet] ERROR: {exc}")
+        log(f"\n[Sweet] ERROR: {exc}")
 
     finally:
         win.set_state("idle" if success else "error")
@@ -733,143 +852,115 @@ def analyze(win: SweetWindow):
             _busy = False
 
 
-def _extract_cells(text: str) -> list:
-    """Parse AUTO_TYPE_JSON block from Gemini response."""
-    m = re.search(
-        r"AUTO_TYPE_JSON_START\s*(\[[\s\S]*?\])\s*AUTO_TYPE_JSON_END",
-        text, re.IGNORECASE
-    )
-    if not m:
-        print("[Sweet] Warning -- AUTO_TYPE_JSON block not found in response.")
-        return []
-    try:
-        data = json.loads(m.group(1))
-        return [
-            (item["cell"].strip().upper(), str(item["value"]).strip())
-            for item in data
-        ]
-    except Exception as e:
-        print(f"[Sweet] JSON parse error: {e}")
-        return []
-
-
 # ─── auto-typer ────────────────────────────────────────────────────────────────
-def auto_type(win: SweetWindow):
-    """
-    Navigate Excel cell-by-cell via Ctrl+G (Go To) and paste each value.
-    Focus Excel before the countdown reaches zero.
-    """
-    with _lock:
-        cells = list(_cells)
+class _Stopped(Exception):
+    pass
 
-    if not cells:
-        print(f"[Sweet] No data to type -- run {HOTKEY_ANALYZE.upper()} first.")
-        win.set_state("error")
-        time.sleep(1.5)
-        win.set_state("idle")
-        return
 
-    print(f"[Sweet] Click on Excel now -- typing starts in {TYPE_START_DELAY}s...")
-    for n in range(TYPE_START_DELAY, 0, -1):
-        print(f"  {n}...")
-        time.sleep(1.0)
-
-    win.set_state("working")
-    print(f"[Sweet] Typing {len(cells)} cells into Excel...")
-
-    try:
-        for addr, value in cells:
-            _goto_cell(addr)
-            _paste_value(value)
-            time.sleep(CELL_PAUSE)
-
-        print("[Sweet] Auto-type complete!")
-        win.set_state("idle")
-
-    except Exception as exc:
-        print(f"[Sweet] Auto-type error: {exc}")
-        win.set_state("error")
+def _wait(seconds: float):
+    """Sleep, but abort immediately if the stop hotkey was pressed."""
+    if _stop.wait(seconds):
+        raise _Stopped()
 
 
 def _goto_cell(addr: str):
-    """Use Excel's Go To dialog (Ctrl+G / F5) to navigate to a cell address."""
+    """Jump to a cell with Excel's Go To dialog (Ctrl+G)."""
     pyautogui.hotkey("ctrl", "g")
-    time.sleep(0.25)
-    # Select all existing content in Reference field, then clear it
+    _wait(0.35)
     pyautogui.hotkey("ctrl", "a")
-    time.sleep(0.06)
     pyautogui.press("delete")
-    time.sleep(0.04)
-    # Type the cell address (always simple: B2, C10, D6, etc.)
-    pyautogui.typewrite(addr, interval=0.04)
+    pyautogui.typewrite(addr, interval=NAV_KEY_DELAY)
     pyautogui.press("enter")
-    time.sleep(0.20)
+    _wait(0.35)
 
 
-def _paste_value(value: str):
-    """Paste a value into the active Excel cell using the clipboard."""
-    pyperclip.copy(value)
-    pyautogui.hotkey("ctrl", "v")
-    time.sleep(0.08)
-    pyautogui.press("enter")   # confirm entry
+def _type_value(value: str):
+    """Type one character at a time, TYPE_CHAR_DELAY apart, then commit the cell."""
+    for ch in value:
+        if _stop.is_set():
+            raise _Stopped()
+        pyautogui.typewrite(ch)
+        _wait(TYPE_CHAR_DELAY)
+    # Excel's AutoComplete can tack extra text onto labels like "Price"; Delete removes it.
+    pyautogui.press("delete")
+    pyautogui.press("enter")
+
+
+def auto_type(win: SweetWindow):
+    global _busy
+
+    with _lock:
+        cells = list(_cells)
+        if _busy:
+            log("[Sweet] Busy -- wait for the current run to finish.")
+            return
+        if not cells:
+            log(f"[Sweet] Nothing to type yet -- run {HOTKEY_ANALYZE.upper()} first.")
+            win.set_state("error")
+            return
+        _busy = True
+
+    _stop.clear()
+    success = False
+    try:
+        chars = sum(len(v) for _, v in cells)
+        log(f"[Sweet] Click your Excel sheet now -- typing {len(cells)} cells "
+            f"(~{chars * TYPE_CHAR_DELAY / 60:.1f} min) starts in {TYPE_START_DELAY}s.  "
+            f"{HOTKEY_STOP.upper()} stops it.")
+        _wait(TYPE_START_DELAY)
+        win.set_state("working")
+
+        for addr, value in cells:
+            _goto_cell(addr)
+            _type_value(value)
+            log(f"  {addr:<6} {value}")
+            _wait(CELL_PAUSE)
+
+        log("[Sweet] Auto-type complete.")
+        success = True
+
+    except _Stopped:
+        log("[Sweet] Auto-type stopped.")
+        success = True
+    except Exception as exc:
+        log(f"[Sweet] Auto-type error: {exc}")
+
+    finally:
+        win.set_state("idle" if success else "error")
+        with _lock:
+            _busy = False
 
 
 # ─── hotkeys ───────────────────────────────────────────────────────────────────
-def register_hotkeys(win: SweetWindow):
-    keyboard.add_hotkey(
-        HOTKEY_ANALYZE,
-        lambda: threading.Thread(target=analyze, args=(win,), daemon=True).start(),
-        suppress=True,
-    )
-    keyboard.add_hotkey(
-        HOTKEY_TYPE,
-        lambda: threading.Thread(target=auto_type, args=(win,), daemon=True).start(),
-        suppress=True,
-    )
-    keyboard.add_hotkey(
-        HOTKEY_QUIT,
-        lambda: (keyboard.unhook_all(), win.root.after(0, win.root.quit)),
-        suppress=True,
-    )
+def _spawn(fn, win):
+    threading.Thread(target=fn, args=(win,), daemon=True).start()
 
-    bar = "+" + "-" * 40 + "+"
-    print(f"\n{bar}")
-    print(f"|{'Sweet is running':^40}|")
-    print(f"{bar}")
-    print(f"|  {HOTKEY_ANALYZE.upper():<14}  analyze screen       |")
-    print(f"|  {HOTKEY_TYPE.upper():<14}  auto-type into Excel  |")
-    print(f"|  {HOTKEY_QUIT.upper():<14}  quit                  |")
-    print(f"{bar}\n")
+
+def register_hotkeys(win: SweetWindow):
+    keyboard.add_hotkey(HOTKEY_ANALYZE, lambda: _spawn(analyze, win), suppress=True)
+    keyboard.add_hotkey(HOTKEY_TYPE,    lambda: _spawn(auto_type, win), suppress=True)
+    keyboard.add_hotkey(HOTKEY_STOP,    _stop.set, suppress=True)
+    keyboard.add_hotkey(HOTKEY_QUIT,
+                        lambda: (_stop.set(), keyboard.unhook_all(), win.call(win.root.quit)),
+                        suppress=True)
+    log(f"[Sweet] Running.  {HOTKEY_ANALYZE.upper()} analyze | {HOTKEY_TYPE.upper()} auto-type | "
+        f"{HOTKEY_STOP.upper()} stop | {HOTKEY_QUIT.upper()} quit")
 
 
 # ─── entry point ───────────────────────────────────────────────────────────────
-def main():
-    ap = argparse.ArgumentParser(
-        description="Sweet -- Finance Screenshot Analyzer",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=(
-            "Set GEMINI_API_KEY before running:\n"
-            "  Windows:    set GEMINI_API_KEY=your_key_here\n"
-            "  Mac/Linux:  export GEMINI_API_KEY=your_key_here"
-        ),
-    )
-    ap.add_argument(
-        "--taskbar", action="store_true",
-        help="Show status bar in taskbar (default: tiny background dot only)",
-    )
-    args = ap.parse_args()
+def main(argv=None):
+    ap = argparse.ArgumentParser(description="Sweet -- Finance Screenshot -> Excel worksheet")
+    ap.add_argument("--taskbar", action="store_true",
+                    help="show a small status bar in the taskbar (default: tiny dot only)")
+    args = ap.parse_args(argv)
 
     if not API_KEY:
-        print(
-            "[Sweet] WARNING: GEMINI_API_KEY not set -- analysis will fail.\n"
-            "  Windows:    set GEMINI_API_KEY=your_key_here\n"
-            "  Mac/Linux:  export GEMINI_API_KEY=your_key_here\n"
-        )
+        log("[Sweet] WARNING: no API key found (sweet_key.txt or GEMINI_API_KEY).")
 
     win = SweetWindow(taskbar=args.taskbar)
     register_hotkeys(win)
     win.mainloop()
-    print("[Sweet] Goodbye.")
+    log("[Sweet] Goodbye.")
 
 
 if __name__ == "__main__":
