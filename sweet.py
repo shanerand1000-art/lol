@@ -1383,7 +1383,7 @@ def analyze(win: SweetWindow):
             with _lock:
                 _cells = []
             pyperclip.copy(answer)
-            log(f"[Sweet] Multiple choice answer: {answer}  (copied to clipboard)")
+            log(answer)
             success = True
         else:
             if not cells:
@@ -1398,7 +1398,7 @@ def analyze(win: SweetWindow):
             log(f"[Sweet] Copied {len(cells)} cells to clipboard.  "
                 f"{HOTKEY_TYPE.upper()} auto-types them (~{chars * TYPE_CHAR_DELAY / 60:.1f} min).")
             if answer:
-                log(f"[Sweet] Matching choice: {answer}")
+                log(answer)
             success = True
 
     except Exception as exc:
