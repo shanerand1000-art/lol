@@ -15,7 +15,8 @@ Run:
   (double-click sweet_background.pyw / sweet_taskbar.pyw to run with no console window)
 
 Hotkeys (system-wide):
-  Ctrl+Shift+S  screenshot -> Gemini -> worksheet copied to clipboard
+  `  (backtick key, left of 1; Ctrl+Shift+S also works)
+                screenshot -> Gemini -> answer copied to clipboard
                 dot in top-right = working; dot gone = done and copied; red ! = error
   Ctrl+Shift+T  auto-type the worksheet into Excel, one character every 0.5 s
   Ctrl+Shift+X  stop the auto-typer immediately
@@ -110,7 +111,8 @@ MODEL_CHAIN = [
     ] if m
 ]
 
-HOTKEY_ANALYZE = "ctrl+shift+s"
+HOTKEY_ANALYZE = "`"             # the backtick key (left of 1): screenshot + answer
+HOTKEY_ANALYZE_ALT = "ctrl+shift+s"   # backup shortcut
 HOTKEY_TYPE    = "ctrl+shift+t"
 HOTKEY_STOP    = "ctrl+shift+x"
 HOTKEY_QUIT    = "ctrl+shift+q"
@@ -120,7 +122,7 @@ TYPE_CHAR_DELAY  = 0.5    # seconds between typed characters
 CELL_PAUSE       = 0.5    # seconds between finishing one cell and moving to the next
 RESYNC_EVERY     = 20     # go back to A1 to re-sync after this many cells (0 = never)
 LOG_FILE         = os.path.join(HERE, "sweet.log")
-VERSION          = "v9 - lowercase labels"
+VERSION          = "v10 - backtick key"
 LOWERCASE_ALL    = True   # type and copy everything in lowercase (pv, div1, fv ...)
 
 # ─── system prompt (the full finance worksheet prompt) ─────────────────────────
@@ -1523,14 +1525,18 @@ def _spawn(fn, win):
 
 
 def register_hotkeys(win: SweetWindow):
-    keyboard.add_hotkey(HOTKEY_ANALYZE, lambda: _spawn(analyze, win), suppress=True)
+    for hk in (HOTKEY_ANALYZE, HOTKEY_ANALYZE_ALT):
+        try:
+            keyboard.add_hotkey(hk, lambda: _spawn(analyze, win), suppress=True)
+        except Exception as e:
+            log(f"[Sweet] Could not register hotkey {hk!r}: {e}")
     keyboard.add_hotkey(HOTKEY_TYPE,    lambda: _spawn(auto_type, win), suppress=True)
     keyboard.add_hotkey(HOTKEY_STOP,    _stop.set, suppress=True)
     keyboard.add_hotkey(HOTKEY_QUIT,
                         lambda: (_stop.set(), keyboard.unhook_all(), win.call(win.root.quit)),
                         suppress=True)
     log(f"[Sweet] {VERSION}")
-    log(f"[Sweet] Running.  {HOTKEY_ANALYZE.upper()} analyze | {HOTKEY_TYPE.upper()} auto-type | "
+    log(f"[Sweet] Running.  {HOTKEY_ANALYZE} (or {HOTKEY_ANALYZE_ALT.upper()}) analyze | {HOTKEY_TYPE.upper()} auto-type | "
         f"{HOTKEY_STOP.upper()} stop | {HOTKEY_QUIT.upper()} quit")
 
 
