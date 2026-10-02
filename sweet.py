@@ -613,6 +613,7 @@ class SweetWindow:
         self._phase  = 0.0
         self._dir    = 1.0
         self._q      = queue.Queue()
+        self.actions = {}          # filled in by main(): snap / type / stop
         self._build()
         self.root.after(40, self._poll)
 
@@ -624,13 +625,19 @@ class SweetWindow:
             r.title("Sweet")
             r.resizable(False, False)
             r.wm_attributes("-topmost", True)
-            w, h = 175, 28
-            r.geometry(f"{w}x{h}+{sw - w - 6}+6")
             r.configure(bg="#111111")
-            self._var = tk.StringVar(value="Sweet  |  ready")
+            self._var = tk.StringVar(value="Sweet | ready")
             self._lbl = tk.Label(r, textvariable=self._var, bg="#111111", fg="#777777",
-                                 font=("Consolas", 9), anchor="w", padx=8)
-            self._lbl.pack(fill="both", expand=True)
+                                 font=("Consolas", 9), anchor="w", padx=8, width=15)
+            self._lbl.pack(side="left", fill="y")
+            for key, text in (("snap", "Snap"), ("type", "Type"), ("stop", "Stop")):
+                tk.Button(r, text=text, width=6, relief="flat", bg="#2d2d2d", fg="white",
+                          activebackground="#444444", activeforeground="white",
+                          command=lambda k=key: self.actions[k]()
+                          ).pack(side="left", padx=2, pady=3)
+            r.update_idletasks()
+            w, h = r.winfo_reqwidth() + 6, 30
+            r.geometry(f"{w}x{h}+{sw - w - 6}+6")
         else:
             r.overrideredirect(True)            # no title bar, not in the taskbar
             r.wm_attributes("-topmost", True)
@@ -660,9 +667,8 @@ class SweetWindow:
         self.root.after(40, self._poll)
 
     def hide(self):
-        """Hide the dot (used before taking a screenshot)."""
-        if not self.taskbar:
-            self.call(self.root.withdraw)
+        """Hide the dot / status bar so it is not in the screenshot."""
+        self.call(self.root.withdraw)
 
     def set_state(self, state: str):
         """state in {'idle', 'working', 'error'}; safe to call from any thread."""
@@ -674,11 +680,12 @@ class SweetWindow:
         s = self._state
         if self.taskbar:
             cfg = {
-                "idle":    ("Sweet  |  ready",    "#777777"),
-                "working": ("Sweet  |  working",  "#FFA020"),
-                "error":   ("Sweet  |  error  !", "#FF3333"),
+                "idle":    ("Sweet | ready",   "#777777"),
+                "working": ("Sweet | working", "#FFA020"),
+                "error":   ("Sweet | error !", "#FF3333"),
             }
             txt, col = cfg[s]
+            self.root.deiconify()
             self._var.set(txt)
             self._lbl.configure(fg=col)
             return
@@ -965,6 +972,9 @@ def main(argv=None):
         log("[Sweet] WARNING: no API key found (sweet_key.txt or GEMINI_API_KEY).")
 
     win = SweetWindow(taskbar=args.taskbar)
+    win.actions = {"snap": lambda: _spawn(analyze, win),
+                   "type": lambda: _spawn(auto_type, win),
+                   "stop": _stop.set}
     register_hotkeys(win)
     win.mainloop()
     log("[Sweet] Goodbye.")
