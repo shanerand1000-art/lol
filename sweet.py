@@ -77,7 +77,14 @@ except Exception:
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
+# Paste your Gemini API key between the quotes, replacing the placeholder text.
+# (Or skip this and use a sweet_key.txt file instead. Never upload this file to GitHub with your real key in it.)
+API_KEY_HERE = "PASTE_YOUR_GEMINI_API_KEY_HERE"
+
+
 def _load_api_key() -> str:
+    if API_KEY_HERE.strip() and API_KEY_HERE != "PASTE_YOUR_GEMINI_API_KEY_HERE":
+        return API_KEY_HERE.strip()
     key = os.environ.get("GEMINI_API_KEY", "").strip()
     if key:
         return key
