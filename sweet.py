@@ -124,8 +124,9 @@ TYPE_CHAR_DELAY  = 0.5    # seconds between typed characters
 CELL_PAUSE       = 0.5    # seconds between finishing one cell and moving to the next
 RESYNC_EVERY     = 20     # go back to A1 to re-sync after this many cells (0 = never)
 LOG_FILE         = os.path.join(HERE, "sweet.log")
-VERSION          = "v11 - ` analyze, ~ type"
+VERSION          = "v12 - clipboard switch"
 LOWERCASE_ALL    = True   # type and copy everything in lowercase (pv, div1, fv ...)
+COPY_TO_CLIPBOARD = True  # False = never touch the clipboard (the typer still works; see sweet.log)
 
 # ─── system prompt (the full finance worksheet prompt) ─────────────────────────
 SYSTEM_PROMPT = """You are an Excel finance worksheet assistant.
@@ -1071,6 +1072,11 @@ _cells  = []                    # [(addr, value), ...] from the last analysis
 _stop   = threading.Event()     # set by HOTKEY_STOP to abort auto-typing
 
 
+def _copy(text: str):
+    if COPY_TO_CLIPBOARD:
+        pyperclip.copy(text)
+
+
 def log(msg: str = ""):
     print(msg)
     try:
@@ -1389,18 +1395,18 @@ def analyze(win: SweetWindow):
         if not cells and answer:
             with _lock:
                 _cells = []
-            pyperclip.copy(answer)
+            _copy(answer)
             log(answer)
             success = True
         else:
             if not cells:
-                pyperclip.copy(clean)
+                _copy(clean)
                 raise RuntimeError("Gemini returned no cell data for the auto-typer "
                                    "(worksheet text was copied instead). Try again.")
 
             with _lock:
                 _cells = cells
-            pyperclip.copy(_to_clipboard_grid(cells))
+            _copy(_to_clipboard_grid(cells))
             chars = sum(len(v) for _, v in cells)
             log(f"[Sweet] Copied {len(cells)} cells to clipboard.  "
                 f"press ~ to auto-type them (~{chars * TYPE_CHAR_DELAY / 60:.1f} min).")
