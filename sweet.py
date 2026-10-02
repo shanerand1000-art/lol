@@ -848,15 +848,28 @@ def _wait(seconds: float):
         raise _Stopped()
 
 
+def _release_modifiers():
+    """Make sure Ctrl/Shift/Alt are really up, or Excel sees Ctrl+Shift+<key> and ignores us."""
+    deadline = time.time() + 5
+    while time.time() < deadline and any(keyboard.is_pressed(k) for k in ("ctrl", "shift", "alt")):
+        _wait(0.05)
+    for k in ("ctrl", "shift", "alt"):
+        pyautogui.keyUp(k)
+    _wait(0.2)
+
+
 def _goto_cell(addr: str):
-    """Jump to a cell with Excel's Go To dialog (Ctrl+G)."""
-    pyautogui.hotkey("ctrl", "g")
-    _wait(0.35)
-    pyautogui.hotkey("ctrl", "a")
-    pyautogui.press("delete")
-    pyautogui.typewrite(addr, interval=NAV_KEY_DELAY)
-    pyautogui.press("enter")
-    _wait(0.35)
+    """Jump to a cell with no dialog: Escape, Ctrl+Home (A1), then arrow keys."""
+    row, col = _addr_key(addr)
+    pyautogui.press("escape")
+    _wait(0.1)
+    pyautogui.hotkey("ctrl", "home")
+    _wait(0.3)
+    if row > 1:
+        pyautogui.press("down", presses=row - 1, interval=0.01)
+    if col > 1:
+        pyautogui.press("right", presses=col - 1, interval=0.01)
+    _wait(0.2)
 
 
 def _type_value(value: str):
@@ -893,6 +906,7 @@ def auto_type(win: SweetWindow):
             f"(~{chars * TYPE_CHAR_DELAY / 60:.1f} min) starts in {TYPE_START_DELAY}s.  "
             f"{HOTKEY_STOP.upper()} stops it.")
         _wait(TYPE_START_DELAY)
+        _release_modifiers()
         win.set_state("working")
 
         for addr, value in cells:
