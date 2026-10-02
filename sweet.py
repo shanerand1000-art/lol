@@ -517,6 +517,7 @@ List EVERY cell that should contain something, with its address and exact conten
 Formula cells start with = exactly as typed in Excel. Put only cell contents in the JSON, no formatting. A plain rate may be written as a percent like 15.1% (Excel turns it into 0.151); otherwise no dollar signs or thousands commas.
 Keep column A and row 1 completely empty: no labels, no stray 0, no year or timeline numbers there. Start the worksheet in column B at row 3 or lower. For a timeline, put the year numbers in a row below row 1 starting at column C, with the row labels in column B.
 Follow the short label style above (r, n, PV, FV, PMT, CF, P0, Sale Px). Never use FORMULATEXT.
+Never use dollar signs in formulas (no locked or absolute references like $C$3 or C$3). Write plain references like C3, and ignore the $ in the examples above. Every formula is typed into its own cell, so nothing needs locking.
 Use valid JSON (double quotes, no trailing commas) and do not wrap the block in code fences.
 """
 
@@ -680,7 +681,10 @@ def _clean_value(v) -> str:
     for a, b in (("−", "-"), ("–", "-"), ("—", "-"),
                  ("‘", "'"), ("’", "'"), ("“", '"'), ("”", '"')):
         s = s.replace(a, b)
-    return s.replace("\t", " ").replace("\r", " ").replace("\n", " ")
+    s = s.replace("\t", " ").replace("\r", " ").replace("\n", " ")
+    if s.startswith("="):
+        s = s.replace("$", "")        # no locked ($) references in typed formulas
+    return s
 
 
 def _extract_cells(text: str) -> list:
