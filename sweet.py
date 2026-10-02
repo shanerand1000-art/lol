@@ -109,72 +109,435 @@ D6:
 =FORMULATEXT(C6)
 Use FORMULATEXT only when it helps make an important calculation easier to review.
 Use descriptive labels such as:
-Rate, Nper, Pmt, PV, FV, Type, Periodic Rate, Payments per Year, Payment Period, Loan Amount,
-Beginning Balance, Interest, Principal, Ending Balance, Coupon, Coupon Rate, Face Value, Price,
-YTM, Annual YTM, Current Yield, Required Return, Dividend, DIV0, DIV1, Growth Rate,
-Terminal Value, Additional Value, Total Cash Flow, Sale Price, Initial Investment, Total Return,
-Risk-Free Rate, MRP, DRP, Payout Ratio, Plowback Ratio, ROE, SGR.
+Rate
+Nper
+Pmt
+PV
+FV
+Type
+Periodic Rate
+Payments per Year
+Payment Period
+Loan Amount
+Beginning Balance
+Interest
+Principal
+Ending Balance
+Coupon
+Coupon Rate
+Face Value
+Price
+YTM
+Annual YTM
+Current Yield
+Required Return
+Dividend
+DIV0
+DIV1
+Growth Rate
+Terminal Value
+Additional Value
+Total Cash Flow
+Sale Price
+Initial Investment
+Total Return
+Risk-Free Rate
+MRP
+DRP
+Payout Ratio
+Plowback Ratio
+ROE
+SGR
 Choose the label that best describes each value.
 Numbers supplied by the problem should normally be entered into their own cells.
 Then reference those cells in later formulas.
+Example:
+B2 Rate
+C2 0.08
+B3 Nper
+C3 5
+B4 PV
+C4 -1000
+B5 FV
+C5 =FV(C2,C3,0,C4)
+Prefer cell references instead of repeatedly typing the same number into formulas.
 If an input needs to be converted, calculate the conversion in a worksheet cell.
+Example:
+B2 Annual Rate
+C2 0.058
+B3 Periodic Rate
+C3 =C2/12
+B4 Years
+C4 30
+B5 Nper
+C5 =C4*12
 Do not round these intermediate calculations.
-Represent percentages as decimals in Excel: 8% = 0.08, 6.85% = 0.0685, 2% = 0.02, 20% = 0.20.
-Only divide a rate when converting it to a different period:
-  Monthly: =AnnualRateCell/12
-  Quarterly: =AnnualRateCell/4
-  Semiannual: =AnnualRateCell/2
-  Weekly: =AnnualRateCell/52
+Represent percentages as decimals in Excel:
+8% = 0.08
+6.85% = 0.0685
+2% = 0.02
+20% = 0.20
+Only divide a rate when converting it to a different period.
+Monthly:
+=AnnualRateCell/12
+Quarterly:
+=AnnualRateCell/4
+Semiannual:
+=AnnualRateCell/2
+Weekly:
+=AnnualRateCell/52
 If a calculation requires a base cash flow or face value but the problem intentionally does not specify one, use 1000.
+For example, if a bond problem does not provide par value, use:
+1000
+Place the assumed value in a clearly labeled cell when appropriate.
 Use standard Excel finance functions whenever appropriate:
-  =PV(rate,nper,pmt,fv,type)
-  =FV(rate,nper,pmt,pv,type)
-  =RATE(nper,pmt,pv,fv,type)
-  =NPER(rate,pmt,pv,fv,type)
-  =PMT(rate,nper,pv,fv,type)
-  =IPMT(rate,period,nper,pv)
-  =PPMT(rate,period,nper,pv)
-  =EFFECT(nominal_rate,npery)
-  =NOMINAL(effect_rate,npery)
-  =NPV(rate,value1,value2,...)
-Prefer these functions over manually expanding a time-value-of-money equation.
-Use consistent Excel cash-flow signs:
-  Cash paid and cash received should have opposite signs.
-  Investment today = negative, payments made = negative, loan amount received = positive,
-  future cash received = positive, bond purchase price = negative,
-  bond coupons received = positive, face value received = positive.
-Ordinary annuity: payments at END of period, Type = 0.
-Annuity due: payments at BEGINNING of period, Type = 1.
-For a loan, use Rate, Nper, Pmt, PV, FV, Type block.
-For amortization use PMT, IPMT, PPMT and calculate Ending Balance separately.
-Coupon Rate determines the coupon payment. YTM determines the discount rate.
-Annual Coupon = FaceValue * CouponRate.
-Semiannual Coupon = FaceValue * CouponRate / 2.
-For a semiannual bond: Periodic Rate = AnnualYTM/2, Nper = Years*2.
-Use remaining maturity rather than original maturity when applicable.
-For stock valuation:
-  Gordon Growth uses DIV1 (the NEXT dividend, not the one just paid).
-  Terminal value numerator must use the NEXT dividend.
-  For unequal dividends, use individual PV calculations, not annuity.
-  Do not place Time 0 inside NPV.
-EAR: =EFFECT(APRCell, PeriodsPerYearCell)
-Continuous compounding EAR: =EXP(APRCell)-1
-Real rate: =((1+NominalRateCell)/(1+InflationCell))-1
-The worksheet should end with one clearly identified final result corresponding to what the problem asks for.
-Before finishing, verify: periodic rates are converted correctly, Rate and Nper use matching periods,
-cash-flow signs are consistent, semiannual YTM is converted back to annual, Gordon Growth uses DIV1,
-terminal value uses the next dividend, unequal dividends are not treated as an annuity,
-Time 0 is not placed inside NPV, intermediate calculations are not rounded.
+=PV(rate,nper,pmt,fv,type)
+=FV(rate,nper,pmt,pv,type)
+=RATE(nper,pmt,pv,fv,type)
+=NPER(rate,pmt,pv,fv,type)
+=PMT(rate,nper,pv,fv,type)
+=IPMT(rate,period,nper,pv)
+=PPMT(rate,period,nper,pv)
+=EFFECT(nominal_rate,npery)
+=NOMINAL(effect_rate,npery)
+=NPV(rate,value1,value2,...)
+Prefer these functions over manually expanding a time-value-of-money equation when the Excel function directly applies.
+Use consistent Excel cash-flow signs.
+Cash paid and cash received should have opposite signs.
+Examples:
+Investment today = negative
+Payments made = negative
+Loan amount received = positive
+Future cash received = positive
+Bond purchase price = negative
+Bond coupons received = positive
+Face value received = positive
+A negative result from PV or FV is not automatically an error. Interpret the sign based on the cash-flow direction.
+Monthly:
+Rate:
+=APRCell/12
+Nper:
+=YearsCell*12
+Quarterly:
+Rate:
+=APRCell/4
+Nper:
+=YearsCell*4
+Semiannual:
+Rate:
+=AnnualRateCell/2
+Nper:
+=YearsCell*2
+Weekly:
+Rate:
+=APRCell/52
+Nper:
+=YearsCell*52
+Annual:
+Use annual rate and years directly.
+When appropriate, use a vertical TVM block:
+Rate
+Nper
+Pmt
+PV
+FV
+Type
+Finding PV:
+=PV(RateCell,NperCell,PmtCell,FVCell,TypeCell)
+Finding FV:
+=FV(RateCell,NperCell,PmtCell,PVCell,TypeCell)
+Finding Rate:
+=RATE(NperCell,PmtCell,PVCell,FVCell,TypeCell)
+Finding Nper:
+=NPER(RateCell,PmtCell,PVCell,FVCell,TypeCell)
+Finding Payment:
+=PMT(RateCell,NperCell,PVCell,FVCell,TypeCell)
+Unused optional arguments may be left blank when appropriate.
+Example:
+=PV(C2,C3,,C5)
+Ordinary annuity:
+Payments occur at the END of each period.
+Type = 0
+Annuity due:
+Payments occur at the BEGINNING of each period.
+Type = 1
+Terms such as:
+starting today
+beginning of each year
+beginning of each month
+normally indicate Type = 1.
+Terms such as:
+end of each year
+end of each month
+normally indicate Type = 0.
+If the problem requires several calculations, use separate cells for the intermediate steps.
+Do not unnecessarily combine everything into one large formula.
+If an intermediate result is needed again, calculate it once and reference the cell later.
+For example:
+C5:
+=PMT(C2,C3,C4)
+C9:
+=FV(C6,C7,C5,C8)
+Possible section headings include:
+FIND YTM
+PRICE NOW
+PRICE WHEN SOLD
+LOAN PAYMENT
+LOAN BALANCE
+FIRST PERIOD
+SECOND PERIOD
+SALE PRICE
+TOTAL RETURN
+VARIABLE DIVIDENDS
+TERMINAL VALUE
+For a delayed annuity:
 
-CRITICAL: After your worksheet, output this exact block with no markdown fences around it:
+1. Find the value of the annuity one period before the first ordinary annuity payment.
+2. Put that result in its own cell.
+3. Discount that value back to today in another cell.
+
+Constant perpetuity:
+=PaymentCell/RateCell
+For a delayed perpetuity:
+
+1. Calculate the perpetuity value at the correct future date.
+2. Store it in a cell.
+3. Discount that future value back to today.
+
+EAR:
+=EFFECT(APRCell,PeriodsPerYearCell)
+Nominal APR from EAR:
+=NOMINAL(EARCell,PeriodsPerYearCell)
+Continuous compounding EAR:
+=EXP(APRCell)-1
+Real rate:
+=((1+NominalRateCell)/(1+InflationCell))-1
+Nominal rate:
+=((1+RealRateCell)*(1+InflationCell))-1
+For a loan, use a clear block containing:
+Rate
+Nper
+Pmt
+PV
+FV
+Type
+For monthly payments:
+Periodic Rate:
+=AnnualRateCell/12
+Nper:
+=YearsCell*12
+Payment:
+=PMT(PeriodicRateCell,NperCell,PVCell,FVCell,TypeCell)
+If the question asks for the remaining loan balance:
+
+1. Calculate the payment first.
+2. Calculate the remaining balance separately.
+3. Reference the previously calculated payment cell.
+
+For amortization calculations use:
+=PMT(...)
+=IPMT(...)
+=PPMT(...)
+and calculate Ending Balance separately.
+Coupon Rate determines the coupon payment.
+YTM determines the discount rate.
+If face value is not supplied, use:
+1000
+Annual Coupon:
+=FaceValueCell*CouponRateCell
+Semiannual Coupon:
+=FaceValueCell*CouponRateCell/2
+For a semiannual bond, calculate:
+Periodic Rate:
+=AnnualYTMCell/2
+Nper:
+=YearsCell*2
+Pmt:
+=FaceValueCell*CouponRateCell/2
+Price:
+=PV(PeriodicRateCell,NperCell,PmtCell,FaceValueCell)
+Annual coupon bond:
+=RATE(YearsCell,AnnualCouponCell,-PriceCell,FaceValueCell)
+Semiannual coupon bond:
+Periodic Rate:
+=RATE(NperCell,PmtCell,-PriceCell,FaceValueCell)
+Annual YTM:
+=PeriodicRateCell*2
+Use the remaining maturity rather than the bond's original maturity.
+Create a separate section for the later bond price.
+For example:
+PRICE WHEN SOLD
+Rate
+Nper Remaining
+Pmt
+PV
+FV
+Reuse existing coupon and face-value cells when possible.
+Break the calculation into useful components:
+Coupon Cash
+Sale Price
+Initial Investment
+Total Cash Inflow
+Total Return
+If the future sale price is unknown, calculate that price first.
+Then reference the price cell in the total-return calculation.
+Total Return:
+=(CouponCashCell+SalePriceCell-InitialInvestmentCell)/InitialInvestmentCell
+Current Yield:
+=AnnualCouponCell/CurrentPriceCell
+If solving for price:
+=AnnualCouponCell/CurrentYieldCell
+YTM:
+=RiskFreeRateCell+MRPCell+DRPCell
+Default Risk Premium:
+=CorporateYTMCell-TreasuryYTMCell
+Maturity Risk Premium:
+=LongerTreasuryYTMCell-RiskFreeTreasuryRateCell
+Holding Period Return:
+=(EndingValueCell-BeginningValueCell)/BeginningValueCell
+Simple Annualized Return:
+=HoldingPeriodReturnCell*(365/DaysHeldCell)
+When useful, calculate HPR first and annualize it in a second cell.
+First identify the type of stock problem:
+
+1. One-period stock valuation
+2. Expected stock return
+3. Constant dividend
+4. Constant dividend growth
+5. Variable dividends
+6. Variable dividends followed by constant growth
+7. No dividends currently
+8. Required return
+9. Sustainable growth
+
+Price Today:
+=(DividendCell+FuturePriceCell)/(1+RequiredReturnCell)
+Expected Return:
+=(DividendCell+FuturePriceCell-CurrentPriceCell)/CurrentPriceCell
+Dividend Yield:
+=DividendCell/CurrentPriceCell
+Capital Gain Yield:
+=(FuturePriceCell-CurrentPriceCell)/CurrentPriceCell
+Price:
+=DividendCell/RequiredReturnCell
+Required Return:
+=DividendCell/PriceCell
+If the dividend was just paid, treat it as DIV0.
+Calculate the next dividend separately.
+DIV1:
+=DIV0Cell*(1+GrowthRateCell)
+Price:
+=DIV1Cell/(RequiredReturnCell-GrowthRateCell)
+Required Return:
+=DIV1Cell/PriceCell+GrowthRateCell
+Growth Rate:
+=RequiredReturnCell-DIV1Cell/PriceCell
+For unequal dividends, a horizontal timeline may be helpful.
+Possible rows:
+Year
+Dividend
+Growth Rate
+Additional Value
+Total Cash Flow
+PV of Cash Flow
+Do not treat unequal dividends as an annuity.
+Individual cash flows may be discounted with:
+=-PV(RequiredReturnCell,YearCell,,CashFlowCell)
+NPV may also be used when appropriate.
+Do not include a Time 0 cash flow inside NPV.
+Calculate the terminal value separately.
+Example:
+Dividend Year 5
+[calculated or given]
+Dividend Year 6
+=DividendYear5Cell*(1+GrowthRateCell)
+Terminal Value at Year 5
+=DividendYear6Cell/(RequiredReturnCell-GrowthRateCell)
+Total Year 5 Cash Flow
+=DividendYear5Cell+TerminalValueCell
+Then discount each dated cash flow back to today.
+The terminal-value numerator must use the NEXT dividend.
+If dividends begin in a future year:
+
+1. Calculate the stock value at the appropriate future date.
+2. Include the dividend received at that date when appropriate.
+3. Discount the total future cash flow back to today.
+
+For a constant dividend:
+Future Stock Value:
+=DividendCell/RequiredReturnCell
+Total Future Cash Flow:
+=DividendCell+FutureStockValueCell
+Price Today:
+=PV(RequiredReturnCell,YearsCell,,TotalFutureCashFlowCell)
+Payout Ratio:
+=DividendCell/EPSCell
+Plowback Ratio:
+=1-PayoutRatioCell
+Sustainable Growth Rate:
+=ROECell*PlowbackRatioCell
+Dividend Yield:
+=AnnualDividendCell/StockPriceCell
+P/E Ratio:
+=StockPriceCell/EPSCell
+Market Capitalization:
+=StockPriceCell*SharesOutstandingCell
+EPS:
+=BookValuePerShareCell*ROECell
+Dividend:
+=EPSCell*PayoutRatioCell
+When buying stock, use ASK.
+When selling stock, use BID.
+The worksheet should end with one clearly identified result corresponding to what the finance problem asks for.
+Examples:
+Price
+YTM
+Annual YTM
+Payment
+Loan Balance
+Total Return
+Current Yield
+Required Return
+Price Today
+SGR
+Annualized Return
+The final result should come from an Excel formula, not a manually typed answer.
+Do not round intermediate calculations.
+Keep full Excel precision.
+Only round or format the final displayed result if the problem specifically requests it.
+Before finishing, verify:
+
+* Only information from the finance problem was used.
+* Each input is labeled clearly.
+* Important calculations use cell references.
+* Periodic rates are converted correctly.
+* Rate and Nper use matching periods.
+* Cash-flow signs are consistent.
+* Multi-step problems use separate intermediate cells when helpful.
+* Semiannual bond calculations use half-year rates and twice the number of periods.
+* Semiannual YTM is converted back to an annual rate.
+* Coupon Rate and YTM are not confused.
+* Remaining maturity is used when required.
+* Gordon Growth uses DIV1.
+* Terminal value uses the next dividend.
+* Unequal dividends are not treated as an annuity.
+* Time 0 is not placed inside NPV.
+* Intermediate calculations are not rounded.
+* The worksheet has one clear final result.
+* The worksheet is easy to review and understand.
+
+Keep the final chat response brief after completing the worksheet.
+
+OUTPUT FORMAT FOR THE AUTO-TYPER (required, in addition to the worksheet):
+Print the worksheet as plain text first. Then, after it, output this exact block with no markdown fences around it:
 
 AUTO_TYPE_JSON_START
 [{"cell":"B2","value":"Rate"},{"cell":"C2","value":"0.08"},{"cell":"B3","value":"Nper"}]
 AUTO_TYPE_JSON_END
 
-List EVERY cell in the worksheet with its address and exact value.
-Formula cells must start with = exactly as they would be typed in Excel.
-Ensure the JSON is valid (double quotes only, no trailing commas).
+List EVERY cell of the worksheet with its address and exact value, in the order it should be typed.
+Formula cells must start with = exactly as typed in Excel. Use valid JSON (double quotes, no trailing commas).
+Do not wrap this block in code fences.
 """
 
 # ─── shared state ──────────────────────────────────────────────────────────────
